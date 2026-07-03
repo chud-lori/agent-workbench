@@ -14,8 +14,9 @@ New machine? See **Harness setup** below to register the MCP and install the sta
    - `kind`: `decision` | `fact` | `gotcha` | `preference` | `todo` | `note`
    - `project`: repo directory name (e.g. `99-home-value-leads`)
    - `tags`: short keywords for recall
+   - Every note must include a source reference — a ticket key, Slack channel + date, doc name, or file path. Notes without breadcrumbs are dead ends.
    - Never store secrets, tokens, or anything trivially derivable from the code itself.
-3. **Recall before re-deriving**: before answering questions about past decisions or cross-repo conventions, check `brain_recall` (query, or filter by `project`/`kind`).
+3. **Recall before re-deriving**: before answering questions about past decisions or cross-repo conventions, check `brain_recall` (query, or filter by `project`/`kind`). When a stored todo is done, mark it with `brain_resolve` (do not forget it — history matters); resolved notes are hidden from default recall unless you pass `include_resolved`. Back up the brain with `brain_export`.
 4. **Index freshness**: if `code_search`/`brief_task` warn the index is stale, run `refresh_code_index` (incremental, fast). `rebuild_code_index` only after changing index roots.
 5. **Diagnostics**: `doctor_report` when local AI setup misbehaves (secrets hygiene, MCP config, permissions); `mcp_health` for MCP config checks; `work_sources_status` when the Slack/Google/Atlassian connector MCPs misbehave.
 
@@ -25,6 +26,8 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 |---|---|
 | `brief_task` | one-call task context pack (code + docs + brain + commands) |
 | `brain_remember` / `brain_recall` / `brain_forget` | persistent cross-session, cross-tool memory |
+| `brain_resolve` | mark a todo/note resolved (hidden from default recall; `include_resolved` shows it) |
+| `brain_export` | dump all brain notes to markdown (backup) |
 | `code_search` | bm25 keyword search over indexed repos |
 | `codebase_overview` | languages/package files/docs per indexed repo |
 | `search_knowledge` | live search over CLAUDE.md/AGENTS.md/SKILL.md/READMEs |
@@ -71,6 +74,14 @@ python3 "$WORKBENCH/run_cli.py" index
 ```
 
 Set the env vars in your shell profile if you change the defaults; the MCP server reads them at launch.
+
+**4. Install the SessionStart hook (Claude Code):** auto-injects the 5 most recent brain notes into every session's context and refreshes the code index in the background. Add to `~/.claude/settings.json` (replace `<WORKBENCH>` with your clone path):
+
+```json
+{"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/session-start.sh"}]}]}}
+```
+
+The script resolves the workbench root from its own location, prints nothing if the brain is empty, and always exits 0 so it can never break session start.
 
 ## Project conventions (when editing this repo)
 

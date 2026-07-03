@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .brain import forget, recall, remember
+from .brain import export, forget, recall, remember, resolve
 from .code_index import code_search, codebase_overview, index_status, rebuild_index, refresh_index
 from .config import WorkbenchConfig, default_config
 from .knowledge import brief_task, context_for_path, find_service_context, search_knowledge
@@ -77,9 +77,16 @@ def main(argv: list[str] | None = None) -> int:
     recall_cmd.add_argument("--project", default=None)
     recall_cmd.add_argument("--kind", default=None)
     recall_cmd.add_argument("--limit", type=int, default=20)
+    recall_cmd.add_argument("--all", action="store_true", help="Include resolved notes")
 
     forget_cmd = sub.add_parser("forget", help="Delete a brain note by id")
     forget_cmd.add_argument("id", type=int)
+
+    resolve_cmd = sub.add_parser("resolve", help="Mark a brain note resolved by id")
+    resolve_cmd.add_argument("id", type=int)
+
+    export_cmd = sub.add_parser("export", help="Export all brain notes as markdown")
+    export_cmd.add_argument("--out", default=None, help="Optional file path; prints markdown to stdout when omitted")
 
     sub.add_parser("mcp-server", help="Run stdio MCP server")
 
@@ -125,9 +132,14 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "remember":
         print(dump_json(remember(args.content, args.kind, args.project, args.tags, config)))
     elif args.command == "recall":
-        print(dump_json(recall(args.query, args.project, args.kind, args.limit, config)))
+        print(dump_json(recall(args.query, args.project, args.kind, args.limit, args.all, config)))
     elif args.command == "forget":
         print(dump_json(forget(args.id, config)))
+    elif args.command == "resolve":
+        print(dump_json(resolve(args.id, config)))
+    elif args.command == "export":
+        report = export(args.out, config)
+        print(dump_json(report) if args.out else report["markdown"])
     elif args.command == "mcp-server":
         return serve()
     return 0

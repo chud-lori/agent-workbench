@@ -7,7 +7,7 @@ Local workbench for Codex/Claude: setup diagnostics, an FTS code index over `~/r
 ```bash
 python -m agent_workbench doctor --all
 python -m agent_workbench mcp-check
-python -m agent_workbench context /Users/nurchudlori/repo/99-api-v2
+python -m agent_workbench context ~/repo/99-api-v2
 python -m agent_workbench search "home value pause resume"
 python -m agent_workbench brief TSUN-19634
 python -m agent_workbench index                # rebuild; defaults to ~/repo
@@ -16,16 +16,19 @@ python -m agent_workbench index-status
 python -m agent_workbench code-search "pause resume package"
 python -m agent_workbench remember "hvl Mongo collection is 'package' (singular)" --kind fact --project 99-home-value-leads
 python -m agent_workbench recall "hvl collection"
+python -m agent_workbench recall --all              # include resolved notes
+python -m agent_workbench resolve 3                 # mark a todo/note resolved (kept, hidden from default recall)
+python -m agent_workbench export --out brain.md    # dump all notes to markdown (backup)
 python -m agent_workbench forget 3
 python -m agent_workbench work-sources
 python -m agent_workbench mcp-server
 ```
 
-From outside this directory, use the launchers:
+From outside this directory, use the launchers (`$WORKBENCH` = path to this repo's clone):
 
 ```bash
-python3 /Users/nurchudlori/Projects/agent-workbench/run_cli.py doctor --all
-python3 /Users/nurchudlori/Projects/agent-workbench/run_mcp.py
+python3 "$WORKBENCH/run_cli.py" doctor --all
+python3 "$WORKBENCH/run_mcp.py"
 ```
 
 ## Index roots
@@ -49,7 +52,7 @@ cat harness/standing-instructions.md >> ~/.codex/AGENTS.md    # Codex
 cat harness/standing-instructions.md >> ~/.gemini/GEMINI.md   # Gemini CLI
 ```
 
-Then build the index: `python3 run_cli.py index`. See AGENTS.md → "Harness setup" for the full walkthrough.
+Then build the index: `python3 run_cli.py index`. Optionally install the SessionStart hook (`harness/hooks/session-start.sh`) so Claude Code auto-injects recent brain notes into every session and refreshes the index in the background — see AGENTS.md → "Harness setup" step 4 for the settings.json snippet. See AGENTS.md → "Harness setup" for the full walkthrough.
 
 ## Codex MCP Config
 
@@ -58,7 +61,7 @@ Add to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.agent_workbench]
 command = "python3"
-args = ["/Users/nurchudlori/Projects/agent-workbench/run_mcp.py"]
+args = ["<path-to-agent-workbench>/run_mcp.py"]
 startup_timeout_sec = 20
 tool_timeout_sec = 90
 enabled = true
@@ -67,7 +70,7 @@ enabled = true
 ## Claude MCP Config
 
 ```bash
-claude mcp add agent-workbench python3 /Users/nurchudlori/Projects/agent-workbench/run_mcp.py
+claude mcp add agent-workbench python3 "$WORKBENCH/run_mcp.py"
 ```
 
 ## MCP Tools
@@ -90,8 +93,10 @@ Code index (SQLite FTS over `~/repo`):
 Brain (persistent memory in `.state/brain.sqlite`):
 
 - `brain_remember`: store a durable note (`decision`, `fact`, `gotcha`, `preference`, `todo`, `note`) with optional project/tags.
-- `brain_recall`: FTS search over notes, or recent notes when no query is given.
+- `brain_recall`: FTS search over notes, or recent notes when no query is given. Resolved notes are hidden unless `include_resolved` is set.
+- `brain_resolve`: mark a todo/note resolved — kept for history, hidden from default recall.
 - `brain_forget`: delete a note by id.
+- `brain_export`: dump all notes to a markdown file (the backup story).
 
 Orchestrator:
 
@@ -101,4 +106,4 @@ Orchestrator:
 
 This tool does not call any LLM API. Codex/Claude provide the reasoning layer; Agent Workbench provides deterministic retrieval, diagnostics, and durable memory.
 
-State lives under `/Users/nurchudlori/Projects/agent-workbench/.state/` (`index.sqlite` for the code index, `brain.sqlite` for notes). The index is a snapshot — run `refresh-index` periodically (or wire it into a cron/hook); `code_search` and `brief_task` warn when it is older than 24 hours.
+State lives under `<path-to-agent-workbench>/.state/` (`index.sqlite` for the code index, `brain.sqlite` for notes). The index is a snapshot — run `refresh-index` periodically (or wire it into a cron/hook; the SessionStart hook does this automatically); `code_search` and `brief_task` warn when it is older than 24 hours. For backups, `brain_export` (CLI: `export [--out PATH]`) dumps every note to markdown — check that file into a private repo or sync it wherever your backups live.

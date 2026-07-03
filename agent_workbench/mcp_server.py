@@ -4,7 +4,7 @@ import json
 import sys
 from typing import Any, Callable
 
-from .brain import forget, recall, remember
+from .brain import export, forget, recall, remember, resolve
 from .code_index import code_search, codebase_overview, index_status, rebuild_index, refresh_index
 from .config import default_config
 from .knowledge import brief_task, find_service_context, search_knowledge
@@ -69,6 +69,7 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "project": {"type": "string"},
                 "kind": {"type": "string"},
                 "limit": {"type": "integer"},
+                "include_resolved": {"type": "boolean"},
             },
             "additionalProperties": False,
         },
@@ -79,6 +80,23 @@ TOOLS: dict[str, dict[str, Any]] = {
             "type": "object",
             "properties": {"id": {"type": "integer"}},
             "required": ["id"],
+            "additionalProperties": False,
+        },
+    },
+    "brain_resolve": {
+        "description": "Mark a brain note resolved by id so default brain_recall hides it.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"id": {"type": "integer"}},
+            "required": ["id"],
+            "additionalProperties": False,
+        },
+    },
+    "brain_export": {
+        "description": "Export all brain notes (including resolved) as a markdown document, optionally written to a file.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
             "additionalProperties": False,
         },
     },
@@ -159,9 +177,12 @@ def serve() -> int:
             args.get("project"),
             args.get("kind"),
             args.get("limit", 20),
+            args.get("include_resolved", False),
             default_config(),
         ),
         "brain_forget": lambda args: forget(args.get("id", 0), default_config()),
+        "brain_resolve": lambda args: resolve(args.get("id", 0), default_config()),
+        "brain_export": lambda args: export(args.get("path"), default_config()),
         "work_sources_status": lambda args: work_sources_status(default_config()),
     }
     for line in sys.stdin:
