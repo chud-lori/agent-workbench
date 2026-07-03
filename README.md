@@ -1,109 +1,98 @@
 # Agent Workbench
 
-Local workbench for Codex/Claude: setup diagnostics, an FTS code index over `~/repo`, and a persistent "brain" of durable notes. It is intentionally dependency-free — Python ≥3.10 is the only requirement; the [work-mcp](https://github.com/chud-lori/work-mcp) sidecar (Slack/Google connector MCPs, expected at `~/Projects/work-mcp` or `AGENT_WORKBENCH_WORK_MCP_ROOT`) is optional and merely reported on by `work_sources_status`.
+**A local, dependency-free memory and context layer for AI coding agents (Claude Code, Codex, Gemini CLI).**
 
-## Commands
+Agent Workbench gives every agent session on your machine three things they normally lack:
 
-```bash
-python -m agent_workbench doctor --all
-python -m agent_workbench mcp-check
-python -m agent_workbench context ~/repo/99-api-v2
-python -m agent_workbench search "home value pause resume"
-python -m agent_workbench brief TSUN-19634
-python -m agent_workbench index                # rebuild; defaults to ~/repo
-python -m agent_workbench refresh-index        # incremental
-python -m agent_workbench index-status
-python -m agent_workbench code-search "pause resume package"
-python -m agent_workbench remember "hvl Mongo collection is 'package' (singular)" --kind fact --project 99-home-value-leads
-python -m agent_workbench recall "hvl collection"
-python -m agent_workbench recall --all              # include resolved notes
-python -m agent_workbench resolve 3                 # mark a todo/note resolved (kept, hidden from default recall)
-python -m agent_workbench export --out brain.md    # dump all notes to markdown (backup)
-python -m agent_workbench forget 3
-python -m agent_workbench work-sources
-python -m agent_workbench mcp-server
-```
+- 🧠 **A persistent brain** — durable notes (decisions, facts, gotchas) stored in SQLite FTS with porter stemming, shared across *all* your AI tools and sessions. What Claude learns today, Codex recalls tomorrow.
+- 🔎 **A local code index** — full-text search (bm25) across all your repos in one call, with incremental refresh. No embeddings, no API calls — deterministic lexical retrieval; your agent does the semantic reasoning on top.
+- 🩺 **Setup diagnostics** — scans for leaked secrets, broken MCP configs, over-broad permission allowlists, and stale agent docs across your machine.
 
-From outside this directory, use the launchers (`$WORKBENCH` = path to this repo's clone):
+It is a single stdio MCP server + CLI written in stdlib-only Python (≥3.10, the sole requirement). It makes **no LLM or network calls** — your agent harness provides the reasoning; the workbench provides deterministic retrieval and durable memory. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
+
+## Quickstart
 
 ```bash
-python3 "$WORKBENCH/run_cli.py" doctor --all
-python3 "$WORKBENCH/run_mcp.py"
+git clone https://github.com/chud-lori/agent-workbench.git
+cd agent-workbench
+
+# 1. Register the MCP server (Claude Code shown; Codex/Gemini below)
+claude mcp add --scope user agent-workbench python3 "$PWD/run_mcp.py"
+
+# 2. Build the code index over your repos (default: ~/repo — configurable)
+python3 run_cli.py index
+
+# 3. (Recommended) Install the standing instructions so agents use it unprompted
+cat harness/standing-instructions.md >> ~/.claude/CLAUDE.md
 ```
 
-## Index roots
+Full per-harness setup — Codex `config.toml`, Gemini `settings.json`, and the optional Claude Code SessionStart hook that auto-injects recent brain notes into every session — is in [AGENTS.md → Harness setup](AGENTS.md).
 
-The code index scans **only `~/repo`** by default. Override with:
+## Configuration
 
-- `AGENT_WORKBENCH_INDEX_ROOTS` — colon- or comma-separated list of roots, e.g. `~/repo:~/Projects`
-- explicit `roots` argument to `index` / `refresh-index` (CLI) or `rebuild_code_index` / `refresh_code_index` (MCP)
+Everything is driven by environment variables with sensible defaults — nothing is hardcoded to any particular machine layout:
 
-`AGENT_WORKBENCH_REPO_ROOT` still moves the repo root itself. The doctor scan intentionally keeps covering both `~/repo` and `~/Projects` for secrets/config hygiene.
+| Env var | Default | Purpose |
+|---|---|---|
+| `AGENT_WORKBENCH_REPO_ROOT` | `~/repo` | Where your work repos live |
+| `AGENT_WORKBENCH_INDEX_ROOTS` | repo root | Roots to index (colon/comma-separated) |
+| `AGENT_WORKBENCH_PROJECTS_ROOT` | `~/Projects` | Secondary root scanned by diagnostics |
+| `AGENT_WORKBENCH_STATE_DIR` | `<repo>/.state` | SQLite state location (index + brain) |
+| `AGENT_WORKBENCH_WORK_MCP_ROOT` | `~/Projects/work-mcp` | Optional connector sidecar (see below) |
+| `AGENT_WORKBENCH_CODEX_HOME` / `_CLAUDE_HOME` | `~/.codex` / `~/.claude` | Harness config locations for diagnostics |
 
-## Harness setup
+## MCP tools
 
-Agent guidance ships with the repo: `AGENTS.md` (canonical guide, incl. per-machine setup), `CLAUDE.md` (imports AGENTS.md), and `SKILL.md`. Any agent working *in* this repo picks these up automatically.
+**Brain (persistent cross-tool memory):**
 
-To make **every** session on a machine use the workbench (any repo, any harness), register the MCP server (below) and append the shared snippet to your global instruction file:
+- `brain_remember` — store a durable note (`decision` / `fact` / `gotcha` / `preference` / `todo` / `note`) with project + tags; convention: every note carries a source reference (ticket key, Slack thread, doc, or SHA-pinned permalink)
+- `brain_recall` — FTS search with porter stemming; recent notes when no query; resolved notes hidden by default
+- `brain_resolve` / `brain_forget` — mark done (kept, hidden) / delete
+- `brain_export` — dump all notes to markdown (your backup)
+
+**Code index:**
+
+- `code_search` — bm25 keyword search across every indexed repo at once
+- `rebuild_code_index` / `refresh_code_index` / `index_status` — full build / incremental refresh / freshness report
+- `codebase_overview` — languages, package files, docs per repo
+- `search_knowledge` — live search over agent docs (CLAUDE.md, AGENTS.md, SKILL.md, READMEs)
+- `find_service_context` — locate the repo + commands for a service name
+
+**Orchestrator:**
+
+- `brief_task` — the task-start context pack: one call merging code hits, doc hits, matching brain notes, likely repos, and runnable commands
+
+**Diagnostics:**
+
+- `doctor_report` — secrets on disk, broken MCP configs, broad permissions, stale docs
+- `mcp_health` / `work_sources_status` — MCP config checks / connector sidecar health
+
+## CLI
+
+Every tool has a CLI equivalent for shells, cron jobs, and hooks:
 
 ```bash
-cat harness/standing-instructions.md >> ~/.claude/CLAUDE.md   # Claude Code
-cat harness/standing-instructions.md >> ~/.codex/AGENTS.md    # Codex
-cat harness/standing-instructions.md >> ~/.gemini/GEMINI.md   # Gemini CLI
+python3 run_cli.py brief "TICKET-1234"
+python3 run_cli.py remember "orders API paginates at 50, per TICKET-1234" --kind fact --project my-api
+python3 run_cli.py recall "pagination"
+python3 run_cli.py resolve 7          # mark a todo done (kept, hidden from default recall)
+python3 run_cli.py export --out brain-backup.md
+python3 run_cli.py index && python3 run_cli.py index-status
+python3 run_cli.py code-search "rate limiter"
+python3 run_cli.py doctor --all
+python3 run_cli.py mcp-server         # what the MCP registration runs
 ```
 
-Then build the index: `python3 run_cli.py index`. Optionally install the SessionStart hook (`harness/hooks/session-start.sh`) so Claude Code auto-injects recent brain notes into every session and refreshes the index in the background — see AGENTS.md → "Harness setup" step 4 for the settings.json snippet. See AGENTS.md → "Harness setup" for the full walkthrough.
+## Optional: connector sidecar
 
-## Codex MCP Config
+[work-mcp](https://github.com/chud-lori/work-mcp) is a companion project holding Slack / Google Workspace connector MCPs. Agent Workbench doesn't need it — `work_sources_status` simply reports whether it's present and healthy. The separation is deliberate: connector credentials never live in (or flow through) this project.
 
-Add to `~/.codex/config.toml`:
+## Design notes
 
-```toml
-[mcp_servers.agent_workbench]
-command = "python3"
-args = ["<path-to-agent-workbench>/run_mcp.py"]
-startup_timeout_sec = 20
-tool_timeout_sec = 90
-enabled = true
-```
+- **Lexical, not RAG.** Retrieval is SQLite FTS5 + bm25 — exact, explainable, zero-dependency. Query expansion and synthesis are the LLM's job; brain notes carry source breadcrumbs the agent can follow into Jira/Slack/GitHub via their own MCPs.
+- **State is local and disposable.** Everything lives in `.state/` (gitignored): `index.sqlite` is rebuildable anytime; `brain.sqlite` is the only thing worth backing up (`brain_export`).
+- **Instruction-based vs hook-enforced.** Standing instructions make agents *likely* to use the brain; the SessionStart hook makes recall *guaranteed*. Use both.
 
-## Claude MCP Config
+## License
 
-```bash
-claude mcp add agent-workbench python3 "$WORKBENCH/run_mcp.py"
-```
-
-## MCP Tools
-
-Diagnostics:
-
-- `doctor_report`: local setup diagnostics (secrets, MCP config, broad permissions, stale docs).
-- `mcp_health`: MCP command/config checks.
-- `work_sources_status`: connector health for Slack/Google/Atlassian MCPs without exposing secrets.
-
-Code index (SQLite FTS over `~/repo`):
-
-- `rebuild_code_index` / `refresh_code_index`: full or incremental index build.
-- `index_status`: repo/document counts and index age.
-- `code_search`: bm25 keyword search across indexed repos (warns when the index is stale).
-- `codebase_overview`: languages, package files, and docs per indexed repo.
-- `search_knowledge`: live search over agent docs (CLAUDE.md, AGENTS.md, SKILL.md, READMEs).
-- `find_service_context`: likely repo/service context and commands for a service name.
-
-Brain (persistent memory in `.state/brain.sqlite`):
-
-- `brain_remember`: store a durable note (`decision`, `fact`, `gotcha`, `preference`, `todo`, `note`) with optional project/tags.
-- `brain_recall`: FTS search over notes, or recent notes when no query is given. Resolved notes are hidden unless `include_resolved` is set.
-- `brain_resolve`: mark a todo/note resolved — kept for history, hidden from default recall.
-- `brain_forget`: delete a note by id.
-- `brain_export`: dump all notes to a markdown file (the backup story).
-
-Orchestrator:
-
-- `brief_task`: one call that merges code index hits, agent-doc hits, matching brain notes, likely repos, and runnable commands from those repos — the task-start context pack. External Jira/Slack/Google lookups stay with their own MCP servers.
-
-## Notes
-
-This tool does not call any LLM API. Codex/Claude provide the reasoning layer; Agent Workbench provides deterministic retrieval, diagnostics, and durable memory.
-
-State lives under `<path-to-agent-workbench>/.state/` (`index.sqlite` for the code index, `brain.sqlite` for notes). The index is a snapshot — run `refresh-index` periodically (or wire it into a cron/hook; the SessionStart hook does this automatically); `code_search` and `brief_task` warn when it is older than 24 hours. For backups, `brain_export` (CLI: `export [--out PATH]`) dumps every note to markdown — check that file into a private repo or sync it wherever your backups live.
+Currently unlicensed (all rights reserved). Open an issue if you want to use it and this matters to you.

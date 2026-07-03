@@ -1,7 +1,7 @@
 [project]
 name = "agent-workbench"
 version = "0.2.0"
-description = "Local AI agent workbench for MCP health, project context, setup diagnostics, and a persistent brain."
+description = "Local, dependency-free memory and context layer for AI coding agents: persistent cross-tool brain, FTS code index, and setup diagnostics over MCP."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Lori", email = "imlori000@gmail.com" }]

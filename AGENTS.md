@@ -12,7 +12,7 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 1. **Task start**: for a nontrivial ticket/feature/bug, call `brief_task` with the ticket key or feature phrase first. It returns likely repos, code hits, doc hits, saved brain notes, and runnable repo commands in one call — use it before grepping manually.
 2. **Store durable knowledge**: when you learn something durable during work — schema quirks, deploy steps, API behaviors, tricky conventions, decisions made with the user — save it with `brain_remember`:
    - `kind`: `decision` | `fact` | `gotcha` | `preference` | `todo` | `note`
-   - `project`: repo directory name (e.g. `99-home-value-leads`)
+   - `project`: repo directory name (e.g. `my-api`)
    - `tags`: short keywords for recall
    - Every note must include a source reference — a ticket key, Slack channel + date, doc name, file path, or for code on GitHub a permalink pinned to a commit SHA (`repo@sha path:line`; branch links rot). Notes without breadcrumbs are dead ends.
    - Never store secrets, tokens, or anything trivially derivable from the code itself.

@@ -22,8 +22,8 @@ Local MCP server (`agent-workbench` in Claude, `agent_workbench` in Codex) provi
 Run from the agent-workbench repo root (or use its absolute path):
 
 ```bash
-python3 run_cli.py brief "TSUN-19634"
-python3 run_cli.py remember "..." --kind fact --project 99-api-v2
+python3 run_cli.py brief "TICKET-1234"
+python3 run_cli.py remember "..." --kind fact --project my-api
 python3 run_cli.py recall "pause resume"
 python3 run_cli.py refresh-index
 ```
