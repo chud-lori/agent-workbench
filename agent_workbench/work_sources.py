@@ -62,6 +62,10 @@ def _google_status(root: Path) -> dict[str, Any]:
     }
 
 
+DEPRECATED_ATLASSIAN_ENDPOINT = "mcp.atlassian.com/v1/sse"
+CURRENT_ATLASSIAN_ENDPOINT = "https://mcp.atlassian.com/v1/mcp"
+
+
 def _atlassian_status(config: WorkbenchConfig) -> dict[str, Any]:
     codex_config = config.codex_home / "config.toml"
     configured = False
@@ -74,7 +78,41 @@ def _atlassian_status(config: WorkbenchConfig) -> dict[str, Any]:
             url = server.get("url")
         except Exception:
             pass
-    return {"configured_in_codex": configured, "url": url, "registered_name": "atlassian"}
+    claude_url = _claude_server_url("atlassian")
+    status: dict[str, Any] = {
+        "configured_in_codex": configured,
+        "url": url,
+        "claude_url": claude_url,
+        "registered_name": "atlassian",
+    }
+    warnings = []
+    for label, value in (("codex", url), ("claude", claude_url)):
+        if value and DEPRECATED_ATLASSIAN_ENDPOINT in value:
+            warnings.append(
+                f"{label} config uses the deprecated Atlassian SSE endpoint (unsupported after 2026-06-30); "
+                f"switch to {CURRENT_ATLASSIAN_ENDPOINT}"
+            )
+    if warnings:
+        status["warnings"] = warnings
+    return status
+
+
+def _claude_server_url(name: str) -> str | None:
+    path = Path.home() / ".claude.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(errors="replace"))
+    except Exception:
+        return None
+    server = (data.get("mcpServers") or {}).get(name) or {}
+    url = server.get("url")
+    if url:
+        return url
+    for arg in server.get("args") or []:
+        if isinstance(arg, str) and arg.startswith("http"):
+            return arg
+    return None
 
 
 def _agent_workbench_status(config: WorkbenchConfig) -> dict[str, Any]:
