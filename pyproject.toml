@@ -1,0 +1,24 @@
+[project]
+name = "agent-workbench"
+version = "0.1.0"
+description = "Local AI agent workbench for MCP health, project context, and setup diagnostics."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Lori", email = "imlori000@gmail.com" }]
+license = { text = "Private" }
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Private :: Do Not Upload",
+]
+dependencies = []
+
+[project.scripts]
+agent-workbench = "agent_workbench.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["agent_workbench*"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
