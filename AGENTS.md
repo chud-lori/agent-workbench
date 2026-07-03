@@ -14,7 +14,7 @@ New machine? See **Harness setup** below to register the MCP and install the sta
    - `kind`: `decision` | `fact` | `gotcha` | `preference` | `todo` | `note`
    - `project`: repo directory name (e.g. `99-home-value-leads`)
    - `tags`: short keywords for recall
-   - Every note must include a source reference — a ticket key, Slack channel + date, doc name, or file path. Notes without breadcrumbs are dead ends.
+   - Every note must include a source reference — a ticket key, Slack channel + date, doc name, file path, or for code on GitHub a permalink pinned to a commit SHA (`repo@sha path:line`; branch links rot). Notes without breadcrumbs are dead ends.
    - Never store secrets, tokens, or anything trivially derivable from the code itself.
 3. **Recall before re-deriving**: before answering questions about past decisions or cross-repo conventions, check `brain_recall` (query, or filter by `project`/`kind`). When a stored todo is done, mark it with `brain_resolve` (do not forget it — history matters); resolved notes are hidden from default recall unless you pass `include_resolved`. Back up the brain with `brain_export`.
 4. **Index freshness**: if `code_search`/`brief_task` warn the index is stale, run `refresh_code_index` (incremental, fast). `rebuild_code_index` only after changing index roots.

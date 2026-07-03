@@ -49,7 +49,7 @@ def _google_status(root: Path) -> dict[str, Any]:
     server_dir = root / "google-workspace-mcp"
     pyproject = server_dir / "pyproject.toml"
     venv_binary = server_dir / ".venv" / "bin" / "google-workspace-mcp"
-    cfg = Path.home() / ".config" / "codex-google-local-mcp"
+    cfg = Path.home() / ".config" / "google-workspace-mcp"
     return {
         "server_dir": str(server_dir),
         "server_exists": pyproject.exists(),

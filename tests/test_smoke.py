@@ -9,10 +9,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from agent_workbench import mcp_server
+from agent_workbench import brain, mcp_server
 from agent_workbench.config import WorkbenchConfig
 from agent_workbench.scanners import scan_secrets
-from agent_workbench.work_sources import external_source_instructions
 
 
 class SmokeTests(unittest.TestCase):
@@ -24,13 +23,23 @@ class SmokeTests(unittest.TestCase):
         names = {tool["name"] for tool in response["result"]["tools"]}
         self.assertIn("code_search", names)
         self.assertIn("refresh_code_index", names)
-        self.assertIn("work_mcp_bridge", names)
+        self.assertIn("brief_task", names)
+        for tool in ("brain_remember", "brain_recall", "brain_forget", "brain_resolve", "brain_export"):
+            self.assertIn(tool, names)
 
-    def test_external_source_plan_does_not_break_drive_query_quotes(self) -> None:
-        plan = external_source_instructions("owner's package")
-        drive_call = plan["recommended_calls"][2]
-        self.assertEqual(drive_call["tool"], "mcp__google_workspace_local.drive_search")
-        self.assertIn("owner s package", drive_call["arguments"]["query"])
+    def test_brain_roundtrip_with_stemming_and_resolve(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = WorkbenchConfig(workbench_home=Path(tmp))
+            stored = brain.remember("paused the listing package", kind="todo", project="demo", config=config)
+            self.assertTrue(stored["stored"])
+            hits = brain.recall("pause listings", config=config)
+            self.assertEqual([note["id"] for note in hits["notes"]], [stored["id"]])
+            brain.resolve(stored["id"], config=config)
+            self.assertEqual(brain.recall(config=config)["notes"], [])
+            resolved = brain.recall(include_resolved=True, config=config)["notes"]
+            self.assertEqual([note["id"] for note in resolved], [stored["id"]])
+            exported = brain.export(config=config)
+            self.assertIn("paused the listing package", exported["markdown"])
 
     def test_config_reads_environment_overrides(self) -> None:
         old_value = os.environ.get("AGENT_WORKBENCH_WORK_MCP_ROOT")

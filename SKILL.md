@@ -12,8 +12,8 @@ Local MCP server (`agent-workbench` in Claude, `agent_workbench` in Codex) provi
 1. **Task start** — call `brief_task` with the ticket key or feature phrase. Returns likely repos, code hits, agent-doc hits, matching brain notes, and runnable commands in one call. Prefer this over manual grepping across repos.
 2. **During work** — when you learn something durable (schema quirk, deploy step, API behavior, decision), persist it:
    `brain_remember(content, kind=decision|fact|gotcha|preference|todo|note, project=<repo-dir-name>, tags=[...])`.
-   Never store secrets or facts trivially derivable from code.
-3. **Recall** — before re-deriving past decisions or conventions: `brain_recall(query)` or filter by `project`/`kind`.
+   Every note must include a source reference: ticket key, Slack channel + date, doc name, file path, or a GitHub permalink pinned to a commit SHA (`repo@sha path:line`). Never store secrets or facts trivially derivable from code.
+3. **Recall** — before re-deriving past decisions or conventions: `brain_recall(query)` or filter by `project`/`kind`. Mark finished todos with `brain_resolve(id)` (hidden from default recall; `include_resolved` shows them). Back up all notes with `brain_export`.
 4. **Index hygiene** — on a stale-index warning, run `refresh_code_index`. Check freshness with `index_status`.
 5. **Troubleshooting** — `doctor_report` (setup/secrets/permissions), `mcp_health` (MCP configs), `work_sources_status` (Slack/Google/Atlassian connector health).
 
