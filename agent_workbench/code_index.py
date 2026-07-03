@@ -57,9 +57,15 @@ PACKAGE_FILES = {
 }
 
 
+def _resolve_roots(config: WorkbenchConfig, roots: list[str] | None) -> list[Path]:
+    if roots:
+        return [Path(item).expanduser() for item in roots]
+    return list(config.index_roots)
+
+
 def rebuild_index(config: WorkbenchConfig | None = None, roots: list[str] | None = None) -> dict[str, Any]:
     config = config or default_config()
-    root_paths = [Path(item).expanduser() for item in roots] if roots else [config.repo_root, config.projects_root]
+    root_paths = _resolve_roots(config, roots)
     config.workbench_home.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(config.index_path)
     try:
@@ -114,7 +120,7 @@ def rebuild_index(config: WorkbenchConfig | None = None, roots: list[str] | None
 
 def refresh_index(config: WorkbenchConfig | None = None, roots: list[str] | None = None) -> dict[str, Any]:
     config = config or default_config()
-    root_paths = [Path(item).expanduser() for item in roots] if roots else [config.repo_root, config.projects_root]
+    root_paths = _resolve_roots(config, roots)
     config.workbench_home.mkdir(parents=True, exist_ok=True)
     repos = _repo_roots(root_paths)
     conn = sqlite3.connect(config.index_path)
@@ -226,7 +232,11 @@ def code_search(query: str, config: WorkbenchConfig | None = None, limit: int = 
             """,
             (fts_query, limit),
         ).fetchall()
-        return {"query": query, "hits": [dict(row) for row in rows]}
+        result = {"query": query, "hits": [dict(row) for row in rows]}
+        status = index_status(config)
+        if status.get("warning"):
+            result["warning"] = status["warning"]
+        return result
     except sqlite3.OperationalError:
         rows = conn.execute(
             """
@@ -277,42 +287,29 @@ def codebase_overview(target: str | None = None, config: WorkbenchConfig | None 
         conn.close()
 
 
-def brief_work_item(query: str, config: WorkbenchConfig | None = None) -> dict[str, Any]:
+def index_status(config: WorkbenchConfig | None = None) -> dict[str, Any]:
     config = config or default_config()
-    local_hits = code_search(query, config, limit=15)
-    repos = _repos_from_hits(local_hits.get("hits", []))
-    return {
-        "query": query,
-        "local_code_context": local_hits,
-        "likely_repos": repos,
-        "external_sources": external_query_plan(query),
-        "recommended_flow": [
-            "Use atlassian.search for the ticket key or product phrase.",
-            "Use slack_search_messages for the ticket key, feature phrase, and repo names.",
-            "Use drive_search for PRDs, meeting notes, and handoff docs.",
-            "Use code_search results to inspect local repo docs/code before editing.",
-        ],
-    }
-
-
-def external_query_plan(query: str) -> dict[str, Any]:
-    terms = " ".join(re.findall(r"[A-Za-z0-9_-]{2,}", query))
-    quoted = f'"{query}"' if " " in query else query
-    safe_query = query.replace("'", " ")
-    return {
-        "atlassian": [
-            {"tool": "mcp__atlassian.search", "query": terms},
-            {"tool": "mcp__atlassian.search", "query": f"{terms} PRD ADR deployment"},
-        ],
-        "slack": [
-            {"tool": "mcp__slack.slack_search_messages", "query": quoted, "count": 20},
-            {"tool": "mcp__slack.slack_search_messages", "query": f"{terms} repo OR deploy OR bug", "count": 20},
-        ],
-        "google_workspace": [
-            {"tool": "mcp__google_workspace_local.drive_search", "query": f"fullText contains '{safe_query}'", "page_size": 20},
-            {"tool": "mcp__google_workspace_local.drive_search", "query": f"name contains '{safe_query}'", "page_size": 20},
-        ],
-    }
+    if not config.index_path.exists():
+        return {"exists": False, "warning": "index does not exist; run rebuild_code_index first"}
+    conn = sqlite3.connect(config.index_path)
+    try:
+        _init_db(conn)
+        repos = conn.execute("select count(*) from repos").fetchone()[0]
+        documents = conn.execute("select count(*) from documents").fetchone()[0]
+        last_updated = conn.execute("select max(updated_at) from repos").fetchone()[0]
+        age_hours = round((time.time() - last_updated) / 3600, 1) if last_updated else None
+        status: dict[str, Any] = {
+            "exists": True,
+            "index_path": str(config.index_path),
+            "repos": repos,
+            "documents": documents,
+            "age_hours": age_hours,
+        }
+        if age_hours is not None and age_hours > 24:
+            status["warning"] = f"index is {age_hours} hours old; run refresh_code_index"
+        return status
+    finally:
+        conn.close()
 
 
 def _init_db(conn: sqlite3.Connection) -> None:
@@ -423,12 +420,3 @@ def _kind(path: Path) -> str:
 def _fts_query(query: str) -> str:
     terms = re.findall(r"[A-Za-z0-9_/-]{2,}", query)
     return " AND ".join(f'"{term}"' for term in terms) if terms else '""'
-
-
-def _repos_from_hits(hits: list[dict[str, Any]]) -> list[str]:
-    counts: dict[str, int] = {}
-    for hit in hits:
-        repo = hit.get("repo_path")
-        if repo:
-            counts[repo] = counts.get(repo, 0) + 1
-    return [repo for repo, _ in sorted(counts.items(), key=lambda item: -item[1])[:10]]

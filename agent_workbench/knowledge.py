@@ -88,21 +88,31 @@ def context_for_path(path_text: str, config: WorkbenchConfig | None = None) -> d
 
 
 def brief_task(query: str, config: WorkbenchConfig | None = None) -> dict[str, Any]:
+    """One-call orchestrated brief: code index + agent docs + brain notes + repo commands."""
     config = config or default_config()
-    search = search_knowledge(query, config, limit=20)
-    likely_repos = _likely_repos(search["hits"], config)
-    return {
+    from .brain import recall
+    from .code_index import code_search, index_status
+
+    code_hits = code_search(query, config, limit=15)
+    doc_hits = search_knowledge(query, config, limit=15)
+    memory = recall(query=query, limit=10, config=config)
+    likely_repos = _merge_likely_repos(doc_hits["hits"], code_hits.get("hits", []), config)
+    commands = []
+    for repo in likely_repos[:2]:
+        context = context_for_path(repo, config)
+        commands.extend(context["commands"][:10])
+    brief: dict[str, Any] = {
         "query": query,
-        "summary": "Deterministic local brief. Ask Codex/Claude to synthesize these linked hits with Jira/Slack/Docs MCP results when needed.",
-        "local_hits": search["hits"],
         "likely_repos": likely_repos,
-        "next_checks": [
-            "Search Jira/Confluence for the ticket or feature name.",
-            "Search Slack for the ticket key or feature phrase.",
-            "Run context on each likely repo before editing.",
-            "Run doctor if MCP or assistant setup behaves unexpectedly.",
-        ],
+        "code_hits": code_hits.get("hits", []),
+        "doc_hits": doc_hits["hits"],
+        "brain_notes": memory.get("notes", []),
+        "commands": commands[:20],
+        "index_status": index_status(config),
     }
+    if code_hits.get("warning"):
+        brief["warnings"] = [code_hits["warning"]]
+    return brief
 
 
 def find_service_context(service_name: str, config: WorkbenchConfig | None = None) -> dict[str, Any]:
@@ -147,6 +157,25 @@ def _extract_commands(text: str, source: Path) -> list[dict[str, str]]:
 
 def _likely_repos(hits: list[dict[str, Any]], config: WorkbenchConfig) -> list[str]:
     counts: dict[str, int] = {}
+    _count_doc_hits(hits, counts, config)
+    return [repo for repo, _ in sorted(counts.items(), key=lambda item: -item[1])[:10]]
+
+
+def _merge_likely_repos(
+    doc_hits: list[dict[str, Any]],
+    code_hits: list[dict[str, Any]],
+    config: WorkbenchConfig,
+) -> list[str]:
+    counts: dict[str, int] = {}
+    _count_doc_hits(doc_hits, counts, config)
+    for hit in code_hits:
+        repo = hit.get("repo_path")
+        if repo:
+            counts[repo] = counts.get(repo, 0) + 1
+    return [repo for repo, _ in sorted(counts.items(), key=lambda item: -item[1])[:10]]
+
+
+def _count_doc_hits(hits: list[dict[str, Any]], counts: dict[str, int], config: WorkbenchConfig) -> None:
     for hit in hits:
         path = Path(hit["path"])
         for root in [config.repo_root, config.projects_root]:
@@ -157,4 +186,3 @@ def _likely_repos(hits: list[dict[str, Any]], config: WorkbenchConfig) -> list[s
             if rel.parts:
                 repo = str(root / rel.parts[0])
                 counts[repo] = counts.get(repo, 0) + int(hit.get("score", 1))
-    return [repo for repo, _ in sorted(counts.items(), key=lambda item: -item[1])[:10]]

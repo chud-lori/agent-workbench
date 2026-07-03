@@ -4,12 +4,13 @@ import json
 import sys
 from typing import Any, Callable
 
-from .code_index import brief_work_item, code_search, codebase_overview, rebuild_index, refresh_index
+from .brain import forget, recall, remember
+from .code_index import code_search, codebase_overview, index_status, rebuild_index, refresh_index
 from .config import default_config
 from .knowledge import brief_task, find_service_context, search_knowledge
 from .scanners import doctor_report, mcp_health
 from .util import dump_json
-from .work_sources import external_source_instructions, work_mcp_bridge, work_sources_status
+from .work_sources import work_sources_status
 
 
 PROTOCOL_VERSION = "2025-06-18"
@@ -37,11 +38,47 @@ TOOLS: dict[str, dict[str, Any]] = {
         },
     },
     "brief_task": {
-        "description": "Build a deterministic task brief from local indexed context for a ticket, feature, or phrase.",
+        "description": "One-call orchestrated brief for a ticket/feature/phrase: merges code index hits, agent docs, saved brain notes, likely repos, and repo commands.",
         "inputSchema": {
             "type": "object",
             "properties": {"query": {"type": "string"}},
             "required": ["query"],
+            "additionalProperties": False,
+        },
+    },
+    "brain_remember": {
+        "description": "Persist a durable note (decision, fact, gotcha, preference, todo) so future sessions can recall it. Notes surface in brain_recall and brief_task.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "content": {"type": "string"},
+                "kind": {"type": "string", "enum": ["decision", "fact", "gotcha", "preference", "todo", "note"]},
+                "project": {"type": "string"},
+                "tags": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["content"],
+            "additionalProperties": False,
+        },
+    },
+    "brain_recall": {
+        "description": "Search saved brain notes by query/project/kind; omit query to list most recent notes.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "project": {"type": "string"},
+                "kind": {"type": "string"},
+                "limit": {"type": "integer"},
+            },
+            "additionalProperties": False,
+        },
+    },
+    "brain_forget": {
+        "description": "Delete a brain note by id (ids come from brain_recall).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"id": {"type": "integer"}},
+            "required": ["id"],
             "additionalProperties": False,
         },
     },
@@ -55,7 +92,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         },
     },
     "rebuild_code_index": {
-        "description": "Rebuild the local SQLite FTS code/product index across repo and Projects. This writes only to the Agent Workbench .state directory.",
+        "description": "Rebuild the local SQLite FTS code/product index. Defaults to ~/repo (override with roots or AGENT_WORKBENCH_INDEX_ROOTS). Writes only to the Agent Workbench .state directory.",
         "inputSchema": {
             "type": "object",
             "properties": {"roots": {"type": "array", "items": {"type": "string"}}},
@@ -63,12 +100,16 @@ TOOLS: dict[str, dict[str, Any]] = {
         },
     },
     "refresh_code_index": {
-        "description": "Incrementally refresh the local SQLite FTS code/product index, skipping unchanged files.",
+        "description": "Incrementally refresh the local SQLite FTS code/product index (defaults to ~/repo), skipping unchanged files.",
         "inputSchema": {
             "type": "object",
             "properties": {"roots": {"type": "array", "items": {"type": "string"}}},
             "additionalProperties": False,
         },
+    },
+    "index_status": {
+        "description": "Report code index freshness: repo/document counts and age in hours.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
     "code_search": {
         "description": "Search the local SQLite FTS code/product index. Run rebuild_code_index first if needed.",
@@ -87,36 +128,9 @@ TOOLS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
-    "brief_work_item": {
-        "description": "Create a work-item brief from indexed local code plus a query plan for Jira/Slack/Google Workspace MCP tools.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {"query": {"type": "string"}},
-            "required": ["query"],
-            "additionalProperties": False,
-        },
-    },
     "work_sources_status": {
         "description": "Inspect configured work MCP sources: Slack, Google Workspace, Atlassian, and Agent Workbench. Does not expose secrets.",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
-    },
-    "work_mcp_bridge": {
-        "description": "Return work-mcp sidecar status, connector commands, and recommended external MCP calls for a query.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {"query": {"type": "string"}},
-            "required": ["query"],
-            "additionalProperties": False,
-        },
-    },
-    "external_source_plan": {
-        "description": "Return recommended Jira/Confluence, Slack, and Google Workspace MCP calls for a query.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {"query": {"type": "string"}},
-            "required": ["query"],
-            "additionalProperties": False,
-        },
     },
 }
 
@@ -130,12 +144,25 @@ def serve() -> int:
         "find_service_context": lambda args: find_service_context(args.get("service", ""), default_config()),
         "rebuild_code_index": lambda args: rebuild_index(default_config(), args.get("roots")),
         "refresh_code_index": lambda args: refresh_index(default_config(), args.get("roots")),
+        "index_status": lambda args: index_status(default_config()),
         "code_search": lambda args: code_search(args.get("query", ""), default_config(), args.get("limit", 20)),
         "codebase_overview": lambda args: codebase_overview(args.get("target"), default_config()),
-        "brief_work_item": lambda args: brief_work_item(args.get("query", ""), default_config()),
+        "brain_remember": lambda args: remember(
+            args.get("content", ""),
+            args.get("kind", "note"),
+            args.get("project"),
+            args.get("tags"),
+            default_config(),
+        ),
+        "brain_recall": lambda args: recall(
+            args.get("query"),
+            args.get("project"),
+            args.get("kind"),
+            args.get("limit", 20),
+            default_config(),
+        ),
+        "brain_forget": lambda args: forget(args.get("id", 0), default_config()),
         "work_sources_status": lambda args: work_sources_status(default_config()),
-        "work_mcp_bridge": lambda args: work_mcp_bridge(args.get("query", ""), default_config()),
-        "external_source_plan": lambda args: external_source_instructions(args.get("query", "")),
     }
     for line in sys.stdin:
         if not line.strip():
@@ -164,8 +191,12 @@ def _handle_request(request: dict[str, Any], handlers: dict[str, ToolHandler]) -
             "result": {
                 "protocolVersion": client_version if client_version == PROTOCOL_VERSION else PROTOCOL_VERSION,
                 "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "agent-workbench", "version": "0.1.0"},
-                "instructions": "Use Agent Workbench tools to inspect local AI agent setup, MCP health, and repo context.",
+                "serverInfo": {"name": "agent-workbench", "version": "0.2.0"},
+                "instructions": (
+                    "Agent Workbench: local setup diagnostics, an FTS code index over ~/repo, and a persistent brain. "
+                    "Start a task with brief_task (merges code hits, docs, and brain notes). "
+                    "Store durable decisions/gotchas with brain_remember so future sessions recall them."
+                ),
             },
         }
     if method == "ping":

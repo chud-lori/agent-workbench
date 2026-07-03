@@ -3,13 +3,14 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .code_index import brief_work_item, code_search, codebase_overview, rebuild_index, refresh_index
+from .brain import forget, recall, remember
+from .code_index import code_search, codebase_overview, index_status, rebuild_index, refresh_index
 from .config import WorkbenchConfig, default_config
 from .knowledge import brief_task, context_for_path, find_service_context, search_knowledge
 from .mcp_server import serve
 from .scanners import doctor_report, format_report, mcp_health, report_json
 from .util import dump_json
-from .work_sources import external_source_instructions, work_mcp_bridge, work_sources_status
+from .work_sources import work_sources_status
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -43,12 +44,15 @@ def main(argv: list[str] | None = None) -> int:
     service.add_argument("--json", action="store_true")
 
     index = sub.add_parser("index", help="Rebuild local code/product index")
-    index.add_argument("roots", nargs="*", help="Optional roots to index; defaults to repo and Projects")
+    index.add_argument("roots", nargs="*", help="Optional roots to index; defaults to ~/repo (or AGENT_WORKBENCH_INDEX_ROOTS)")
     index.add_argument("--json", action="store_true")
 
     refresh = sub.add_parser("refresh-index", help="Incrementally refresh local code/product index")
-    refresh.add_argument("roots", nargs="*", help="Optional roots to refresh; defaults to repo and Projects")
+    refresh.add_argument("roots", nargs="*", help="Optional roots to refresh; defaults to ~/repo (or AGENT_WORKBENCH_INDEX_ROOTS)")
     refresh.add_argument("--json", action="store_true")
+
+    status = sub.add_parser("index-status", help="Show code index freshness")
+    status.add_argument("--json", action="store_true")
 
     code = sub.add_parser("code-search", help="Search indexed code/product context")
     code.add_argument("query")
@@ -59,20 +63,23 @@ def main(argv: list[str] | None = None) -> int:
     overview.add_argument("target", nargs="?")
     overview.add_argument("--json", action="store_true")
 
-    work = sub.add_parser("work-brief", help="Build local + external-source query brief for a work item")
-    work.add_argument("query")
-    work.add_argument("--json", action="store_true")
-
     sources = sub.add_parser("work-sources", help="Show configured Jira/Slack/Google work MCP sources")
     sources.add_argument("--json", action="store_true")
 
-    bridge = sub.add_parser("work-bridge", help="Show work-mcp bridge status and external MCP call plan")
-    bridge.add_argument("query")
-    bridge.add_argument("--json", action="store_true")
+    remember_cmd = sub.add_parser("remember", help="Store a durable brain note")
+    remember_cmd.add_argument("content")
+    remember_cmd.add_argument("--kind", default="note", choices=["decision", "fact", "gotcha", "preference", "todo", "note"])
+    remember_cmd.add_argument("--project", default=None)
+    remember_cmd.add_argument("--tags", nargs="*", default=None)
 
-    external = sub.add_parser("external-plan", help="Show recommended Jira/Slack/Google MCP calls for a query")
-    external.add_argument("query")
-    external.add_argument("--json", action="store_true")
+    recall_cmd = sub.add_parser("recall", help="Search brain notes; omit query for recent notes")
+    recall_cmd.add_argument("query", nargs="?", default=None)
+    recall_cmd.add_argument("--project", default=None)
+    recall_cmd.add_argument("--kind", default=None)
+    recall_cmd.add_argument("--limit", type=int, default=20)
+
+    forget_cmd = sub.add_parser("forget", help="Delete a brain note by id")
+    forget_cmd.add_argument("id", type=int)
 
     sub.add_parser("mcp-server", help="Run stdio MCP server")
 
@@ -103,24 +110,24 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "refresh-index":
         report = refresh_index(config, args.roots or None)
         print(dump_json(report) if args.json else dump_json(report))
+    elif args.command == "index-status":
+        report = index_status(config)
+        print(dump_json(report))
     elif args.command == "code-search":
         report = code_search(args.query, config, args.limit)
         print(dump_json(report) if args.json else dump_json(report))
     elif args.command == "overview":
         report = codebase_overview(args.target, config)
         print(dump_json(report) if args.json else dump_json(report))
-    elif args.command == "work-brief":
-        report = brief_work_item(args.query, config)
-        print(dump_json(report) if args.json else dump_json(report))
     elif args.command == "work-sources":
         report = work_sources_status(config)
         print(dump_json(report) if args.json else dump_json(report))
-    elif args.command == "work-bridge":
-        report = work_mcp_bridge(args.query, config)
-        print(dump_json(report) if args.json else dump_json(report))
-    elif args.command == "external-plan":
-        report = external_source_instructions(args.query)
-        print(dump_json(report) if args.json else dump_json(report))
+    elif args.command == "remember":
+        print(dump_json(remember(args.content, args.kind, args.project, args.tags, config)))
+    elif args.command == "recall":
+        print(dump_json(recall(args.query, args.project, args.kind, args.limit, config)))
+    elif args.command == "forget":
+        print(dump_json(forget(args.id, config)))
     elif args.command == "mcp-server":
         return serve()
     return 0
@@ -151,17 +158,32 @@ def _format_search(report: dict) -> str:
 
 
 def _format_brief(report: dict) -> str:
-    lines = [f"Brief: {report['query']}", report["summary"]]
+    lines = [f"Brief: {report['query']}"]
     if report.get("likely_repos"):
         lines.append("")
         lines.append("Likely repos:")
         lines.extend(f"- {repo}" for repo in report["likely_repos"])
-    if report.get("local_hits"):
+    if report.get("brain_notes"):
         lines.append("")
-        lines.append("Local hits:")
-        for hit in report["local_hits"][:10]:
-            lines.append(f"- {hit['path']}:{hit['line']} {hit['snippet']}")
-    lines.append("")
-    lines.append("Next checks:")
-    lines.extend(f"- {item}" for item in report["next_checks"])
+        lines.append("Brain notes:")
+        for note in report["brain_notes"]:
+            lines.append(f"- [{note['kind']}#{note['id']}] {note['content'][:200]}")
+    if report.get("code_hits"):
+        lines.append("")
+        lines.append("Code hits:")
+        for hit in report["code_hits"][:10]:
+            lines.append(f"- {hit['repo_path']}/{hit['path']} {hit['snippet'][:160]}")
+    if report.get("doc_hits"):
+        lines.append("")
+        lines.append("Doc hits:")
+        for hit in report["doc_hits"][:10]:
+            lines.append(f"- {hit['path']}:{hit['line']} {hit['snippet'][:160]}")
+    if report.get("commands"):
+        lines.append("")
+        lines.append("Commands:")
+        for command in report["commands"][:10]:
+            lines.append(f"- {command['command']}")
+    for warning in report.get("warnings", []):
+        lines.append("")
+        lines.append(f"Warning: {warning}")
     return "\n".join(lines)

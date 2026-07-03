@@ -29,39 +29,6 @@ def work_sources_status(config: WorkbenchConfig | None = None) -> dict[str, Any]
     return sources
 
 
-def work_mcp_bridge(query: str, config: WorkbenchConfig | None = None) -> dict[str, Any]:
-    config = config or default_config()
-    status = work_sources_status(config)
-    return {
-        "query": query,
-        "status": status,
-        "connector_commands": _connector_commands(config.work_mcp_root),
-        "external_source_plan": external_source_instructions(query),
-        "recommended_flow": [
-            "Call agent_workbench.code_search or brief_work_item first for local code/product context.",
-            "Call the existing atlassian, slack, and google_workspace_local MCP servers for source-of-truth work data.",
-            "Merge external source results into the local code brief before editing.",
-            "Keep connector credentials in work-mcp and user config; do not duplicate them in this repo.",
-        ],
-    }
-
-
-def external_source_instructions(query: str) -> dict[str, Any]:
-    safe_query = query.replace("'", " ")
-    return {
-        "query": query,
-        "note": "Agent Workbench does not duplicate Jira/Slack/Google secrets. Use these existing MCP tools from Codex/Claude and merge their output with brief_work_item.",
-        "recommended_calls": [
-            {"tool": "mcp__atlassian.search", "arguments": {"query": query}},
-            {"tool": "mcp__slack.slack_search_messages", "arguments": {"query": query, "count": 20}},
-            {
-                "tool": "mcp__google_workspace_local.drive_search",
-                "arguments": {"query": f"fullText contains '{safe_query}'", "page_size": 20},
-            },
-        ],
-    }
-
-
 def _slack_status(root: Path) -> dict[str, Any]:
     server = root / "slack-mcp" / "index.js"
     package = root / "slack-mcp" / "package.json"
@@ -155,28 +122,6 @@ def _parse_origin(remote_out: str) -> str | None:
         if len(parts) >= 2 and parts[0] == "origin":
             return parts[1]
     return None
-
-
-def _connector_commands(root: Path) -> dict[str, Any]:
-    slack_server = root / "slack-mcp" / "index.js"
-    google_binary = root / "google-workspace-mcp" / ".venv" / "bin" / "google-workspace-mcp"
-    return {
-        "slack": {
-            "registered_name": "slack",
-            "command": ["node", str(slack_server)],
-            "ready": slack_server.exists() and command_exists("node"),
-        },
-        "google_workspace_local": {
-            "registered_name": "google_workspace_local",
-            "command": [str(google_binary)],
-            "ready": google_binary.exists(),
-        },
-        "atlassian": {
-            "registered_name": "atlassian",
-            "command": "remote MCP configured in Codex/Claude",
-            "ready": True,
-        },
-    }
 
 
 def _env_has_key(path: Path, key: str) -> bool:
