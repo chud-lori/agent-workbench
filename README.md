@@ -1,6 +1,6 @@
 # Agent Workbench
 
-Local workbench for Codex/Claude: setup diagnostics, an FTS code index over `~/repo`, and a persistent "brain" of durable notes. It is intentionally dependency-free.
+Local workbench for Codex/Claude: setup diagnostics, an FTS code index over `~/repo`, and a persistent "brain" of durable notes. It is intentionally dependency-free — Python ≥3.10 is the only requirement; the [work-mcp](https://github.com/chud-lori/work-mcp) sidecar (Slack/Google connector MCPs, expected at `~/Projects/work-mcp` or `AGENT_WORKBENCH_WORK_MCP_ROOT`) is optional and merely reported on by `work_sources_status`.
 
 ## Commands
 

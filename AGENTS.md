@@ -37,7 +37,7 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 
 ## Harness setup (per user machine)
 
-Everything below assumes this repo is cloned at `$WORKBENCH` (e.g. `~/Projects/agent-workbench`).
+Everything below assumes this repo is cloned at `$WORKBENCH` (e.g. `~/Projects/agent-workbench`). The only requirement is Python ≥3.10 — the [work-mcp](https://github.com/chud-lori/work-mcp) sidecar (Slack/Google connector MCPs) is optional; without it, `work_sources_status` simply reports it absent and everything else works. To set up the connectors too, clone work-mcp to `~/Projects/work-mcp` (or set `AGENT_WORKBENCH_WORK_MCP_ROOT`) and follow its README/setup.sh.
 
 **1. Register the MCP server:**
 
