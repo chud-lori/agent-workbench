@@ -83,6 +83,14 @@ Set the env vars in your shell profile if you change the defaults; the MCP serve
 
 The script resolves the workbench root from its own location, prints nothing if the brain is empty, and always exits 0 so it can never break session start.
 
+**5. Install the Stop hook (Claude Code):** enforces the "store durable knowledge" instruction instead of leaving it to model judgment. At every turn end it blocks the stop once and tells the model to save any decisions, gotchas, run results, or new conventions from the turn with `brain_remember` (or end immediately if nothing durable was learned). The `stop_hook_active` flag guarantees it can never loop, and the script always exits 0.
+
+```json
+{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/stop-memory-checkpoint.sh"}]}]}}
+```
+
+Together the two hooks close the second-brain loop at the harness level: SessionStart recalls, Stop stores. Cost: one extra short model pass per turn.
+
 ## Project conventions (when editing this repo)
 
 - Python ≥3.10, stdlib only — do not add dependencies.

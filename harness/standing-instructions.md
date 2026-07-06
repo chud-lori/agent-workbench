@@ -10,3 +10,4 @@ Local MCP with a code index over your repo root, persistent cross-tool memory ("
 - Back up the brain periodically with `brain_export` (dumps all notes to markdown).
 - On a stale-index warning from `code_search`/`brief_task`, run `refresh_code_index`.
 - Setup misbehaving? `doctor_report` (secrets/config/permissions), `mcp_health` (MCP configs), `work_sources_status` (work connector health).
+- Claude Code users: the repo's `harness/hooks/` has a SessionStart hook (recalls recent brain notes into context) and a Stop hook (blocks turn-end once to enforce storing durable knowledge) — install both per AGENTS.md "Harness setup" so recall and store are harness-enforced, not judgment-based.
