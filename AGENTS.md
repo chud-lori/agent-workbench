@@ -11,23 +11,28 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 
 1. **Task start**: for a nontrivial ticket/feature/bug, call `brief_task` with the ticket key or feature phrase first. It returns likely repos, code hits, doc hits, saved brain notes, and runnable repo commands in one call — use it before grepping manually.
 2. **Store durable knowledge**: when you learn something durable during work — schema quirks, deploy steps, API behaviors, tricky conventions, decisions made with the user — save it with `brain_remember`:
-   - `kind`: `decision` | `fact` | `gotcha` | `preference` | `todo` | `note`
+   - `kind`: `decision` | `fact` | `gotcha` | `preference` | `todo` | `note` | `reference`
    - `project`: repo directory name (e.g. `my-api`)
    - `tags`: short keywords for recall
    - Every note must include a source reference — a ticket key, Slack channel + date, doc name, file path, or for code on GitHub a permalink pinned to a commit SHA (`repo@sha path:line`; branch links rot). Notes without breadcrumbs are dead ends.
    - Never store secrets, tokens, or anything trivially derivable from the code itself.
-3. **Recall before re-deriving**: before answering questions about past decisions or cross-repo conventions, check `brain_recall` (query, or filter by `project`/`kind`). When a stored todo is done, mark it with `brain_resolve` (do not forget it — history matters); resolved notes are hidden from default recall unless you pass `include_resolved`. Back up the brain with `brain_export`.
-4. **Index freshness**: if `code_search`/`brief_task` warn the index is stale, run `refresh_code_index` (incremental, fast). `rebuild_code_index` only after changing index roots.
-5. **Diagnostics**: `doctor_report` when local AI setup misbehaves (secrets hygiene, MCP config, permissions); `mcp_health` for MCP config checks; `work_sources_status` when the Slack/Google/Atlassian connector MCPs misbehave.
+3. **Correct, don't contradict**: when new knowledge corrects or extends an earlier note, use `brain_amend` (append a dated addendum, or replace the body) or re-store with `supersedes=[ids]` — superseded notes are hidden from default recall so stale claims can't resurface as truth. `brain_remember` returns `similar_notes` when it spots likely overlap; review them before stacking a near-duplicate.
+4. **Recall before re-deriving**: before answering questions about past decisions or cross-repo conventions, check `brain_recall` (query, or filter by `project`/`kind`). Pass `thread=<tag/key/keyword>` for a chronological digest of one storyline (superseded collapsed to stubs). When a stored todo is done, mark it with `brain_resolve` (do not forget it — history matters); resolved notes are hidden from default recall unless you pass `include_resolved`. Back up the brain with `brain_export`.
+5. **Pin canonical sources**: store runbooks, wiki pages, dashboards as `kind=reference` notes (title + key sections + URL/page id). They surface in `brain_recall` and as `pinned_references` in `brief_task`.
+6. **Check deployed reality**: before claiming how production behaves or writing prod patches, run `repo_state` on the repo — local checkouts often sit on feature branches with undeployed changes. `brief_task` runs this automatically when the query mentions prod/deploy and warns on divergence.
+7. **Index freshness**: if `code_search`/`brief_task` warn the index is stale, run `refresh_code_index` (incremental, fast). `rebuild_code_index` only after changing index roots.
+8. **Diagnostics**: `doctor_report` when local AI setup misbehaves (secrets hygiene, MCP config, permissions); `mcp_health` for MCP config checks; `work_sources_status` when the Slack/Google/Atlassian connector MCPs misbehave.
 
 ## Tool map
 
 | Tool | Use |
 |---|---|
-| `brief_task` | one-call task context pack (code + docs + brain + commands) |
-| `brain_remember` / `brain_recall` / `brain_forget` | persistent cross-session, cross-tool memory |
+| `brief_task` | one-call task context pack (code + docs + brain + pinned references + commands; warns on prod-divergent repos) |
+| `brain_remember` / `brain_recall` / `brain_forget` | persistent cross-session, cross-tool memory (`supersedes=[ids]` retires corrected notes; `thread=` digests a storyline) |
+| `brain_amend` | correct/extend an existing note in place (append a dated addendum or replace) |
 | `brain_resolve` | mark a todo/note resolved (hidden from default recall; `include_resolved` shows it) |
 | `brain_export` | dump all brain notes to markdown (backup) |
+| `repo_state` | branch + ahead/behind origin/main|master + dirty/staleness for a repo — run before prod-behavior claims |
 | `code_search` | bm25 keyword search over indexed repos |
 | `codebase_overview` | languages/package files/docs per indexed repo |
 | `search_knowledge` | live search over CLAUDE.md/AGENTS.md/SKILL.md/READMEs |
@@ -89,7 +94,13 @@ The script resolves the workbench root from its own location, prints nothing if 
 {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/stop-memory-checkpoint.sh"}]}]}}
 ```
 
-Together the two hooks close the second-brain loop at the harness level: SessionStart recalls, Stop stores. Cost: one extra short model pass per turn.
+**6. Install the UserPromptSubmit hook (Claude Code):** approximates involuntary human recall. On every user prompt it FTS-matches the prompt against brain notes and injects up to 5 one-line hits (ids + hooks) into the turn's context; full bodies stay pull-based via `brain_recall`. Threshold-gated — trivial prompts ("yes", "go") inject nothing — and always exits 0.
+
+```json
+{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/prompt-recall.sh"}]}]}}
+```
+
+Together the three hooks close the second-brain loop at the harness level: SessionStart primes, UserPromptSubmit recalls per-turn, Stop stores. Cost: one extra short model pass per turn plus a few injected lines per prompt.
 
 ## Project conventions (when editing this repo)
 

@@ -87,6 +87,9 @@ def context_for_path(path_text: str, config: WorkbenchConfig | None = None) -> d
     }
 
 
+_PROD_HINT = re.compile(r"\b(prod|production|live|deploy|deployed|hotfix|rollback|incident)\b", re.IGNORECASE)
+
+
 def brief_task(query: str, config: WorkbenchConfig | None = None) -> dict[str, Any]:
     """One-call orchestrated brief: code index + agent docs + brain notes + repo commands."""
     config = config or default_config()
@@ -96,6 +99,7 @@ def brief_task(query: str, config: WorkbenchConfig | None = None) -> dict[str, A
     code_hits = code_search(query, config, limit=15)
     doc_hits = search_knowledge(query, config, limit=15)
     memory = recall(query=query, limit=10, config=config)
+    references = recall(query=query, kind="reference", limit=5, config=config)
     likely_repos = _merge_likely_repos(doc_hits["hits"], code_hits.get("hits", []), config)
     commands = []
     for repo in likely_repos[:2]:
@@ -107,11 +111,27 @@ def brief_task(query: str, config: WorkbenchConfig | None = None) -> dict[str, A
         "code_hits": code_hits.get("hits", []),
         "doc_hits": doc_hits["hits"],
         "brain_notes": memory.get("notes", []),
+        "pinned_references": references.get("notes", []),
         "commands": commands[:20],
         "index_status": index_status(config),
     }
+    warnings: list[str] = []
     if code_hits.get("warning"):
-        brief["warnings"] = [code_hits["warning"]]
+        warnings.append(code_hits["warning"])
+    if _PROD_HINT.search(query):
+        from .repo_state import repo_state
+
+        states = {}
+        for repo in likely_repos[:3]:
+            state = repo_state(repo, config)
+            if state.get("error"):
+                continue
+            states[repo] = {key: state.get(key) for key in ("branch", "baseline", "ahead_of_baseline", "behind_baseline")}
+            warnings.extend(state.get("warnings", []))
+        if states:
+            brief["repo_state"] = states
+    if warnings:
+        brief["warnings"] = warnings
     return brief
 
 

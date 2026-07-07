@@ -3,11 +3,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .brain import export, forget, recall, remember, resolve
+from .brain import amend, export, forget, recall, remember, resolve
 from .code_index import code_search, codebase_overview, index_status, rebuild_index, refresh_index
 from .config import WorkbenchConfig, default_config
 from .knowledge import brief_task, context_for_path, find_service_context, search_knowledge
 from .mcp_server import serve
+from .repo_state import repo_state
 from .scanners import doctor_report, format_report, mcp_health, report_json
 from .util import dump_json
 from .work_sources import work_sources_status
@@ -68,9 +69,17 @@ def main(argv: list[str] | None = None) -> int:
 
     remember_cmd = sub.add_parser("remember", help="Store a durable brain note")
     remember_cmd.add_argument("content")
-    remember_cmd.add_argument("--kind", default="note", choices=["decision", "fact", "gotcha", "preference", "todo", "note"])
+    remember_cmd.add_argument(
+        "--kind", default="note", choices=["decision", "fact", "gotcha", "preference", "todo", "note", "reference"]
+    )
     remember_cmd.add_argument("--project", default=None)
     remember_cmd.add_argument("--tags", nargs="*", default=None)
+    remember_cmd.add_argument("--supersedes", nargs="*", type=int, default=None, help="Note ids this note replaces")
+
+    amend_cmd = sub.add_parser("amend", help="Amend an existing brain note in place")
+    amend_cmd.add_argument("id", type=int)
+    amend_cmd.add_argument("content")
+    amend_cmd.add_argument("--replace", action="store_true", help="Rewrite the body instead of appending an addendum")
 
     recall_cmd = sub.add_parser("recall", help="Search brain notes; omit query for recent notes")
     recall_cmd.add_argument("query", nargs="?", default=None)
@@ -78,6 +87,16 @@ def main(argv: list[str] | None = None) -> int:
     recall_cmd.add_argument("--kind", default=None)
     recall_cmd.add_argument("--limit", type=int, default=20)
     recall_cmd.add_argument("--all", action="store_true", help="Include resolved notes")
+    recall_cmd.add_argument("--superseded", action="store_true", help="Include superseded notes")
+    recall_cmd.add_argument("--thread", default=None, help="Digest all notes on a tag/key/keyword chronologically")
+
+    recall_brief_cmd = sub.add_parser(
+        "recall-brief", help="Compact top-hit note lines for a prompt (used by the UserPromptSubmit hook)"
+    )
+    recall_brief_cmd.add_argument("prompt")
+
+    repo_state_cmd = sub.add_parser("repo-state", help="Show a repo's branch/divergence vs origin/main")
+    repo_state_cmd.add_argument("repo")
 
     forget_cmd = sub.add_parser("forget", help="Delete a brain note by id")
     forget_cmd.add_argument("id", type=int)
@@ -130,9 +149,30 @@ def main(argv: list[str] | None = None) -> int:
         report = work_sources_status(config)
         print(dump_json(report) if args.json else dump_json(report))
     elif args.command == "remember":
-        print(dump_json(remember(args.content, args.kind, args.project, args.tags, config)))
+        print(dump_json(remember(args.content, args.kind, args.project, args.tags, config, supersedes=args.supersedes)))
+    elif args.command == "amend":
+        print(dump_json(amend(args.id, args.content, "replace" if args.replace else "append", config)))
     elif args.command == "recall":
-        print(dump_json(recall(args.query, args.project, args.kind, args.limit, args.all, config)))
+        print(
+            dump_json(
+                recall(
+                    args.query,
+                    args.project,
+                    args.kind,
+                    args.limit,
+                    args.all,
+                    config,
+                    thread=args.thread,
+                    include_superseded=args.superseded,
+                )
+            )
+        )
+    elif args.command == "recall-brief":
+        brief_text = _recall_brief(args.prompt, config)
+        if brief_text:
+            print(brief_text)
+    elif args.command == "repo-state":
+        print(dump_json(repo_state(args.repo, config)))
     elif args.command == "forget":
         print(dump_json(forget(args.id, config)))
     elif args.command == "resolve":
@@ -143,6 +183,33 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "mcp-server":
         return serve()
     return 0
+
+
+def _recall_brief(prompt: str, config: WorkbenchConfig) -> str:
+    """Top brain hits for a user prompt, as compact one-liners.
+
+    Threshold-gated so trivial prompts ("yes", "go") inject nothing: the prompt
+    must carry at least two distinctive terms. Full note bodies stay pull-based
+    via brain_recall — this only surfaces ids and hooks.
+    """
+    import re as _re
+
+    prompt = prompt.strip()[:400]
+    distinctive = _re.findall(r"[A-Za-z0-9_/-]{4,}", prompt)
+    if len(set(term.lower() for term in distinctive)) < 2:
+        return ""
+    report = recall(query=prompt, limit=5, config=config)
+    notes = report.get("notes") or []
+    if not notes:
+        return ""
+    lines = ["Possibly relevant brain notes (brain_recall <id/query> for full text):"]
+    for note in notes:
+        content = " ".join(str(note.get("content", "")).split())
+        if len(content) > 150:
+            content = content[:150].rstrip() + "..."
+        project = note.get("project") or "-"
+        lines.append(f"- [{note.get('kind', 'note')}#{note.get('id', '?')}] ({project}) {content}")
+    return "\n".join(lines)
 
 
 def _format_context(report: dict) -> str:

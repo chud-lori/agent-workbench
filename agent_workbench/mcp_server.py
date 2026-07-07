@@ -4,10 +4,11 @@ import json
 import sys
 from typing import Any, Callable
 
-from .brain import export, forget, recall, remember, resolve
+from .brain import amend, export, forget, recall, remember, resolve
 from .code_index import code_search, codebase_overview, index_status, rebuild_index, refresh_index
 from .config import default_config
 from .knowledge import brief_task, find_service_context, search_knowledge
+from .repo_state import repo_state
 from .scanners import doctor_report, mcp_health
 from .util import dump_json
 from .work_sources import work_sources_status
@@ -47,21 +48,35 @@ TOOLS: dict[str, dict[str, Any]] = {
         },
     },
     "brain_remember": {
-        "description": "Persist a durable note (decision, fact, gotcha, preference, todo) so future sessions can recall it. Notes surface in brain_recall and brief_task.",
+        "description": "Persist a durable note (decision, fact, gotcha, preference, todo, reference) so future sessions can recall it. Pass supersedes=[ids] when this note corrects/replaces older ones — superseded notes are hidden from default recall. The result may include similar_notes; review them and amend/supersede instead of stacking contradictions. Use kind=reference to pin canonical docs (runbooks, wiki pages, dashboards) with their title, key sections, and URL/id so they surface in recall and brief_task.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "content": {"type": "string"},
-                "kind": {"type": "string", "enum": ["decision", "fact", "gotcha", "preference", "todo", "note"]},
+                "kind": {"type": "string", "enum": ["decision", "fact", "gotcha", "preference", "todo", "note", "reference"]},
                 "project": {"type": "string"},
                 "tags": {"type": "array", "items": {"type": "string"}},
+                "supersedes": {"type": "array", "items": {"type": "integer"}, "description": "Note ids this note corrects/replaces; they get hidden from default recall"},
             },
             "required": ["content"],
             "additionalProperties": False,
         },
     },
+    "brain_amend": {
+        "description": "Update an existing brain note in place: mode=append (default) adds a dated addendum, mode=replace rewrites the body. Prefer this over storing a near-duplicate note when correcting or extending earlier knowledge.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer"},
+                "content": {"type": "string"},
+                "mode": {"type": "string", "enum": ["append", "replace"]},
+            },
+            "required": ["id", "content"],
+            "additionalProperties": False,
+        },
+    },
     "brain_recall": {
-        "description": "Search saved brain notes by query/project/kind; omit query to list most recent notes.",
+        "description": "Search saved brain notes by query/project/kind; omit query to list most recent notes. Superseded notes are hidden unless include_superseded. Pass thread=<tag/key/keyword> for a chronological digest of every note on that storyline (superseded collapsed to stubs).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -70,6 +85,8 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "kind": {"type": "string"},
                 "limit": {"type": "integer"},
                 "include_resolved": {"type": "boolean"},
+                "include_superseded": {"type": "boolean"},
+                "thread": {"type": "string", "description": "Tag, issue key, or keyword to digest chronologically"},
             },
             "additionalProperties": False,
         },
@@ -150,6 +167,15 @@ TOOLS: dict[str, dict[str, Any]] = {
         "description": "Inspect configured work MCP sources: Slack, Google Workspace, Atlassian, and Agent Workbench. Does not expose secrets.",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
+    "repo_state": {
+        "description": "Report a repo's working-tree state vs its deployed baseline: current branch, ahead/behind origin/main|master, dirty files, fetch staleness. Call before making claims about production behavior from local code — local checkouts often sit on feature branches with undeployed changes.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"repo": {"type": "string", "description": "Repo name (under the repo/projects roots) or absolute path"}},
+            "required": ["repo"],
+            "additionalProperties": False,
+        },
+    },
 }
 
 
@@ -171,6 +197,13 @@ def serve() -> int:
             args.get("project"),
             args.get("tags"),
             default_config(),
+            supersedes=args.get("supersedes"),
+        ),
+        "brain_amend": lambda args: amend(
+            args.get("id", 0),
+            args.get("content", ""),
+            args.get("mode", "append"),
+            default_config(),
         ),
         "brain_recall": lambda args: recall(
             args.get("query"),
@@ -179,7 +212,10 @@ def serve() -> int:
             args.get("limit", 20),
             args.get("include_resolved", False),
             default_config(),
+            thread=args.get("thread"),
+            include_superseded=args.get("include_superseded", False),
         ),
+        "repo_state": lambda args: repo_state(args.get("repo", ""), default_config()),
         "brain_forget": lambda args: forget(args.get("id", 0), default_config()),
         "brain_resolve": lambda args: resolve(args.get("id", 0), default_config()),
         "brain_export": lambda args: export(args.get("path"), default_config()),
@@ -212,11 +248,14 @@ def _handle_request(request: dict[str, Any], handlers: dict[str, ToolHandler]) -
             "result": {
                 "protocolVersion": client_version if client_version == PROTOCOL_VERSION else PROTOCOL_VERSION,
                 "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "agent-workbench", "version": "0.2.0"},
+                "serverInfo": {"name": "agent-workbench", "version": "0.3.0"},
                 "instructions": (
                     "Agent Workbench: local setup diagnostics, an FTS code index over ~/repo, and a persistent brain. "
-                    "Start a task with brief_task (merges code hits, docs, and brain notes). "
-                    "Store durable decisions/gotchas with brain_remember so future sessions recall them."
+                    "Start a task with brief_task (merges code hits, docs, brain notes, and pinned references). "
+                    "Store durable decisions/gotchas with brain_remember; correct earlier notes with brain_amend or "
+                    "supersedes=[ids] instead of stacking contradictions. Use brain_recall thread=<key> for a "
+                    "chronological storyline digest. Before claiming how production behaves, run repo_state on the "
+                    "repo — local checkouts often carry undeployed branches."
                 ),
             },
         }
