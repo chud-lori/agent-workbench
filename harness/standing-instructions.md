@@ -7,6 +7,9 @@ Local MCP with a code index over your repo root, persistent cross-tool memory ("
 - Every `brain_remember` note must include a source reference — a ticket key, Slack channel + date, doc name, file path, or for code on GitHub a permalink pinned to a commit SHA (`repo@sha path:line`; branch links rot). Notes without breadcrumbs are dead ends.
 - When new knowledge corrects or extends an earlier note, use `brain_amend` (dated addendum or replace) or re-store with `supersedes=[ids]` — never stack contradicting notes; superseded ones are hidden from default recall. Review `similar_notes` in the `brain_remember` result before storing near-duplicates.
 - Pin canonical sources (runbooks, wiki pages, dashboards) as `kind=reference` notes with title, key sections, and URL/page id.
+- When a personal note proves general (a gotcha others will hit, a team convention), `brain_promote` it into the team's shared reference file/playbook; evidence and one-offs stay personal.
+- When a stored note or convention decides something, attribute it in one short line (`brain#42: <the rule>`) so the human knows a recorded rule applied — one line, no lecture.
+- Scale verification to the diff (proportional diligence): a small isolated fix needs one proving grep/check, not an audit; save the full checklist for schema/shared/cross-service changes.
 - When a stored todo is done, mark it with `brain_resolve` (do not forget it — history matters). Resolved notes are hidden from default `brain_recall`; pass `include_resolved` to see them.
 - Before re-deriving past decisions or cross-repo conventions, check `brain_recall`; pass `thread=<tag/key/keyword>` for a chronological digest of one storyline.
 - Before claiming how production behaves or writing prod patch queries, run `repo_state` on the repo — local checkouts often sit on feature branches with undeployed changes; verify against `origin/main`.

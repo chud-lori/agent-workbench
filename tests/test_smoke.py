@@ -115,6 +115,43 @@ class SmokeTests(unittest.TestCase):
             hits = brain.recall("pause runbook", kind="reference", config=config)["notes"]
             self.assertEqual([note["id"] for note in hits], [stored["id"]])
 
+    def test_promote_appends_to_target_and_stamps_note(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = WorkbenchConfig(workbench_home=Path(tmp))
+            stored = brain.remember("retry queue drains only on even minutes", kind="gotcha", project="demo", config=config)
+            target = Path(tmp) / "playbook" / "gotchas.md"
+            result = brain.promote(stored["id"], str(target), config=config)
+            self.assertTrue(result["promoted"])
+            text = target.read_text()
+            self.assertIn("retry queue drains only on even minutes", text)
+            self.assertIn(f"gotcha#{stored['id']}", text)
+            again = brain.promote(stored["id"], str(target), config=config)
+            self.assertFalse(again["promoted"])
+            note = brain.recall("retry queue", config=config)["notes"][0]
+            self.assertIn("[PROMOTED", note["content"])
+
+    def test_guard_hook_asks_on_matching_command(self) -> None:
+        import subprocess
+
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            patterns = Path(tmp) / "guard-patterns.txt"
+            patterns.write_text("prod-db\\.internal\n")
+            env = dict(os.environ, AGENT_WORKBENCH_GUARD_PATTERNS=str(patterns))
+            payload = '{"tool_name": "Bash", "tool_input": {"command": "psql -h prod-db.internal -c whatever"}}'
+            out = subprocess.run(
+                ["bash", str(root / "harness" / "hooks" / "pretooluse-guard.sh")],
+                input=payload, capture_output=True, text=True, env=env,
+            )
+            self.assertEqual(out.returncode, 0)
+            self.assertIn('"permissionDecision": "ask"', out.stdout.replace(" ", " "))
+            benign = '{"tool_name": "Bash", "tool_input": {"command": "ls -la"}}'
+            out2 = subprocess.run(
+                ["bash", str(root / "harness" / "hooks" / "pretooluse-guard.sh")],
+                input=benign, capture_output=True, text=True, env=env,
+            )
+            self.assertEqual(out2.stdout.strip(), "")
+
     def test_repo_state_on_non_git_dir_and_temp_repo(self) -> None:
         import subprocess
 

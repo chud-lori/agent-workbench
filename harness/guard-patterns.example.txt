@@ -1,0 +1,18 @@
+# agent-workbench guard patterns — copy to .state/guard-patterns.txt and edit.
+# One Python regex per line; any Bash command matching a line requires explicit
+# human approval before it runs. Keep patterns ORG-SPECIFIC here on your
+# machine; the mechanism stays generic.
+#
+# Examples (commented out — this file ships inactive):
+#
+# Internal prod hosts (anything *.corp.example without a dev. prefix):
+#(?<!dev\.)[a-z0-9-]+\.corp\.example
+#
+# Production database URIs:
+#mongodb://[^ ]*prod
+#postgres://[^ ]*prod
+#
+# Destructive cloud/infra commands:
+#kubectl\s+(delete|drain|cordon)
+#terraform\s+(apply|destroy)
+#aws\s+s3\s+rm

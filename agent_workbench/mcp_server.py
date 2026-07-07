@@ -4,7 +4,7 @@ import json
 import sys
 from typing import Any, Callable
 
-from .brain import amend, export, forget, recall, remember, resolve
+from .brain import amend, export, forget, promote, recall, remember, resolve
 from .code_index import code_search, codebase_overview, index_status, rebuild_index, refresh_index
 from .config import default_config
 from .knowledge import brief_task, find_service_context, search_knowledge
@@ -72,6 +72,18 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "mode": {"type": "string", "enum": ["append", "replace"]},
             },
             "required": ["id", "content"],
+            "additionalProperties": False,
+        },
+    },
+    "brain_promote": {
+        "description": "Promote a personal brain note into a shared, git-versioned markdown reference file (team playbook, skill references/, runbook repo). Appends the note as a readable block and stamps the note so it is never promoted twice. Use when a personal learning proves general enough for the whole team.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer"},
+                "target": {"type": "string", "description": "Markdown file path to append the note to"},
+            },
+            "required": ["id", "target"],
             "additionalProperties": False,
         },
     },
@@ -199,6 +211,7 @@ def serve() -> int:
             default_config(),
             supersedes=args.get("supersedes"),
         ),
+        "brain_promote": lambda args: promote(args.get("id", 0), args.get("target", ""), default_config()),
         "brain_amend": lambda args: amend(
             args.get("id", 0),
             args.get("content", ""),

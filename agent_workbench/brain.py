@@ -247,6 +247,55 @@ def _find_similar(
     return similar
 
 
+def promote(note_id: int, target: str, config: WorkbenchConfig | None = None) -> dict[str, Any]:
+    """Promote a personal note into a shared reference file (team playbook).
+
+    The brain is per-person; teams share knowledge through git-versioned
+    markdown (a skill's references/, a runbook repo, any playbook). Promote
+    appends the note there in a readable block and stamps the note itself so
+    it is never promoted twice. The target is any markdown path — the
+    mechanism carries no org assumptions.
+    """
+    config = config or default_config()
+    if not config.brain_path.exists():
+        return {"id": note_id, "promoted": False, "warning": "brain is empty"}
+    conn = _connect(config)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "select rowid as id, content, kind, project, tags, created_at, resolved_at, superseded_by "
+            "from notes where rowid=?",
+            (note_id,),
+        ).fetchone()
+        if not row:
+            return {"id": note_id, "promoted": False, "warning": "note not found"}
+        note = _note_dict(row)
+        if f"[PROMOTED " in note["content"]:
+            return {"id": note_id, "promoted": False, "warning": "note already promoted (see its content stamp)"}
+        target_path = Path(target).expanduser()
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y-%m-%d", time.localtime())
+        tags = " ".join(note["tags"])
+        block = (
+            f"\n## {note['kind']}#{note['id']}"
+            + (f" ({note['project']})" if note.get("project") else "")
+            + f" — promoted {stamp}\n"
+            + (f"tags: {tags}\n\n" if tags else "\n")
+            + note["content"].strip()
+            + "\n"
+        )
+        with target_path.open("a", encoding="utf-8") as fh:
+            fh.write(block)
+        conn.execute(
+            "update notes set content=? where rowid=?",
+            (f"{note['content'].rstrip()}\n\n[PROMOTED {stamp}] to {target_path}", note_id),
+        )
+        conn.commit()
+        return {"id": note_id, "promoted": True, "target": str(target_path)}
+    finally:
+        conn.close()
+
+
 def forget(note_id: int, config: WorkbenchConfig | None = None) -> dict[str, Any]:
     config = config or default_config()
     if not config.brain_path.exists():

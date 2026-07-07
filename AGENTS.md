@@ -19,6 +19,8 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 3. **Correct, don't contradict**: when new knowledge corrects or extends an earlier note, use `brain_amend` (append a dated addendum, or replace the body) or re-store with `supersedes=[ids]` — superseded notes are hidden from default recall so stale claims can't resurface as truth. `brain_remember` returns `similar_notes` when it spots likely overlap; review them before stacking a near-duplicate.
 4. **Recall before re-deriving**: before answering questions about past decisions or cross-repo conventions, check `brain_recall` (query, or filter by `project`/`kind`). Pass `thread=<tag/key/keyword>` for a chronological digest of one storyline (superseded collapsed to stubs). When a stored todo is done, mark it with `brain_resolve` (do not forget it — history matters); resolved notes are hidden from default recall unless you pass `include_resolved`. Back up the brain with `brain_export`.
 5. **Pin canonical sources**: store runbooks, wiki pages, dashboards as `kind=reference` notes (title + key sections + URL/page id). They surface in `brain_recall` and as `pinned_references` in `brief_task`.
+5b. **Promote what proves general**: the brain is personal; teams share through git-versioned markdown. When a personal note proves broadly useful (a gotcha others will hit, a convention), `brain_promote` it into the team's reference file/playbook and open a PR there. Evidence and one-off details stay personal.
+5c. **Attribute rules**: when a stored note or convention decides something in your work, say so in one short line — `brain#42: this repo ships without unit tests` — so the human knows it was a recorded rule, not a whim.
 6. **Check deployed reality**: before claiming how production behaves or writing prod patches, run `repo_state` on the repo — local checkouts often sit on feature branches with undeployed changes. `brief_task` runs this automatically when the query mentions prod/deploy and warns on divergence.
 7. **Index freshness**: if `code_search`/`brief_task` warn the index is stale, run `refresh_code_index` (incremental, fast). `rebuild_code_index` only after changing index roots.
 8. **Diagnostics**: `doctor_report` when local AI setup misbehaves (secrets hygiene, MCP config, permissions); `mcp_health` for MCP config checks; `work_sources_status` when the Slack/Google/Atlassian connector MCPs misbehave.
@@ -30,6 +32,7 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 | `brief_task` | one-call task context pack (code + docs + brain + pinned references + commands; warns on prod-divergent repos) |
 | `brain_remember` / `brain_recall` / `brain_forget` | persistent cross-session, cross-tool memory (`supersedes=[ids]` retires corrected notes; `thread=` digests a storyline) |
 | `brain_amend` | correct/extend an existing note in place (append a dated addendum or replace) |
+| `brain_promote` | append a proven note to a shared, git-versioned markdown reference (team playbook); stamps the note so it promotes once |
 | `brain_resolve` | mark a todo/note resolved (hidden from default recall; `include_resolved` shows it) |
 | `brain_export` | dump all brain notes to markdown (backup) |
 | `repo_state` | branch + ahead/behind origin/main|master + dirty/staleness for a repo — run before prod-behavior claims |
@@ -100,7 +103,17 @@ The script resolves the workbench root from its own location, prints nothing if 
 {"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/prompt-recall.sh"}]}]}}
 ```
 
-Together the three hooks close the second-brain loop at the harness level: SessionStart primes, UserPromptSubmit recalls per-turn, Stop stores. Cost: one extra short model pass per turn plus a few injected lines per prompt.
+**7. Install the PreToolUse guard (Claude Code, optional):** forces explicit human approval for any Bash command matching your guard patterns — enforcement outside the model, for the commands that must never run on autopilot (prod hosts, destructive infra). The mechanism is generic; patterns are per-machine and untracked: copy `harness/guard-patterns.example.txt` to `.state/guard-patterns.txt` and add your org's regexes (or point `AGENT_WORKBENCH_GUARD_PATTERNS` elsewhere). No patterns file = silent no-op.
+
+```json
+{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/pretooluse-guard.sh"}]}]}}
+```
+
+Together the hooks close the second-brain loop at the harness level: SessionStart primes, UserPromptSubmit recalls per-turn, Stop stores, PreToolUse guards. Cost: one extra short model pass per turn plus a few injected lines per prompt.
+
+## Measuring the brain (blind replay)
+
+To prove (or debug) the memory's value, replay a task the team already finished: check out the repo pinned to just before the real fix (single branch, no remote), give the same prompt to the same model twice — once with the workbench MCP/hooks disabled, once enabled — and score both against the shipped fix and your conventions (correctness, rules followed, tool calls, tokens, wall time). Run it blind (no session memory of the original work). This also audits the brain itself: a replay that contradicts a stored note means the note needs `brain_amend`.
 
 ## Project conventions (when editing this repo)
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .brain import amend, export, forget, recall, remember, resolve
+from .brain import amend, export, forget, promote, recall, remember, resolve
 from .code_index import code_search, codebase_overview, index_status, rebuild_index, refresh_index
 from .config import WorkbenchConfig, default_config
 from .knowledge import brief_task, context_for_path, find_service_context, search_knowledge
@@ -81,6 +81,10 @@ def main(argv: list[str] | None = None) -> int:
     amend_cmd.add_argument("content")
     amend_cmd.add_argument("--replace", action="store_true", help="Rewrite the body instead of appending an addendum")
 
+    promote_cmd = sub.add_parser("promote", help="Promote a note into a shared markdown reference file")
+    promote_cmd.add_argument("id", type=int)
+    promote_cmd.add_argument("target", help="Markdown file to append the note to (team playbook/references)")
+
     recall_cmd = sub.add_parser("recall", help="Search brain notes; omit query for recent notes")
     recall_cmd.add_argument("query", nargs="?", default=None)
     recall_cmd.add_argument("--project", default=None)
@@ -152,6 +156,8 @@ def main(argv: list[str] | None = None) -> int:
         print(dump_json(remember(args.content, args.kind, args.project, args.tags, config, supersedes=args.supersedes)))
     elif args.command == "amend":
         print(dump_json(amend(args.id, args.content, "replace" if args.replace else "append", config)))
+    elif args.command == "promote":
+        print(dump_json(promote(args.id, args.target, config)))
     elif args.command == "recall":
         print(
             dump_json(
