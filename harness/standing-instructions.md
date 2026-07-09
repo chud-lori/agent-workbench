@@ -16,4 +16,5 @@ Local MCP with a code index over your repo root, persistent cross-tool memory ("
 - Back up the brain periodically with `brain_export` (dumps all notes to markdown).
 - On a stale-index warning from `code_search`/`brief_task`, run `refresh_code_index`.
 - Setup misbehaving? `doctor_report` (secrets/config/permissions), `mcp_health` (MCP configs), `work_sources_status` (work connector health).
+- When reading Slack via any connector, never surface raw user IDs (U0…) to the user — resolve them to real names first (Slack user lookup, or a pinned roster reference note in the brain).
 - Claude Code users: the repo's `harness/hooks/` has a SessionStart hook (primes recent brain notes + refreshes the index), a UserPromptSubmit hook (injects top note hits matching each prompt — involuntary recall), and a Stop hook (blocks turn-end once to enforce storing durable knowledge) — install all three per AGENTS.md "Harness setup" so recall and store are harness-enforced, not judgment-based.
