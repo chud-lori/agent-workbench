@@ -6,9 +6,9 @@
 # background. A hook must never break session start: every step is
 # best-effort and the script always exits 0.
 #
-# Install (settings.json):
-#   {"hooks": {"SessionStart": [{"hooks": [{"type": "command",
-#     "command": "bash <WORKBENCH>/harness/hooks/session-start.sh"}]}]}}
+# Install: ./setup.sh (or python3 harness/install_hooks.py). Registered with
+# matcher "startup|resume|compact" so the brain re-primes after a context
+# compaction instead of fading mid-session.
 
 # Resolve the workbench root from this script's own location (harness/hooks/ -> repo root).
 WORKBENCH="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" || exit 0
@@ -53,8 +53,15 @@ if lines:
 EOF
 fi
 
-# --- Background index refresh -----------------------------------------------
-# Fully detached and silent; never blocks or fails session start.
-(nohup python3 "$WORKBENCH/run_cli.py" refresh-index >/dev/null 2>&1 &)
+# --- Background self-update + index refresh ----------------------------------
+# Fully detached and silent; never blocks or fails session start. The self-
+# update only fast-forwards and only on a clean working tree, so a machine
+# with local work in progress is never touched.
+(nohup bash -c "
+    if git -C '$WORKBENCH' diff --quiet 2>/dev/null && git -C '$WORKBENCH' diff --cached --quiet 2>/dev/null; then
+        git -C '$WORKBENCH' pull --ff-only -q 2>/dev/null || true
+    fi
+    python3 '$WORKBENCH/run_cli.py' refresh-index
+" >/dev/null 2>&1 &)
 
 exit 0

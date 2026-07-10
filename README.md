@@ -15,18 +15,12 @@ It is a single stdio MCP server + CLI written in stdlib-only Python (≥3.10, th
 ```bash
 git clone https://github.com/chud-lori/agent-workbench.git
 cd agent-workbench
-
-# 1. Register the MCP server (Claude Code shown; Codex/Gemini below)
-claude mcp add --scope user agent-workbench python3 "$PWD/run_mcp.py"
-
-# 2. Build the code index over your repos (default: ~/repo — configurable)
-python3 run_cli.py index
-
-# 3. (Recommended) Install the standing instructions so agents use it unprompted
-cat harness/standing-instructions.md >> ~/.claude/CLAUDE.md
+./setup.sh
 ```
 
-Full per-harness setup — Codex `config.toml`, Gemini `settings.json`, and the optional Claude Code SessionStart hook that auto-injects recent brain notes into every session — is in [AGENTS.md → Harness setup](AGENTS.md).
+`setup.sh` detects your harnesses (Claude Code / Codex / Gemini CLI), registers the MCP server, installs the standing instructions (marker-fenced, so re-runs refresh in place), wires the four Claude Code hooks, and builds the code index. Idempotent — re-run it anytime. `./uninstall.sh` reverses everything but keeps `.state/` (your brain).
+
+Manual per-harness steps (if you'd rather not run the script) are in [AGENTS.md → Harness setup](AGENTS.md).
 
 ## Configuration
 

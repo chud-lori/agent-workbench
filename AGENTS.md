@@ -47,6 +47,8 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 
 Everything below assumes this repo is cloned at `$WORKBENCH` (e.g. `~/Projects/agent-workbench`). The only requirement is Python ≥3.10 — the [work-mcp](https://github.com/chud-lori/work-mcp) sidecar (Slack/Google connector MCPs) is optional; without it, `work_sources_status` simply reports it absent and everything else works. To set up the connectors too, clone work-mcp to `~/Projects/work-mcp` (or set `AGENT_WORKBENCH_WORK_MCP_ROOT`) and follow its README/setup.sh.
 
+**Recommended: run `./setup.sh`** — it does every numbered step below in one idempotent pass: detects your harnesses (Claude Code / Codex / Gemini CLI), registers the MCP server, installs the standing instructions into the right global instruction file (marker-fenced `<!-- agent-workbench:start/end -->` block, refreshed in place on re-run), wires all four Claude Code hooks via `harness/install_hooks.py` (re-runs upgrade existing entries instead of duplicating), optionally seeds guard patterns, and builds the index. `./uninstall.sh` reverses all of it but never touches `.state/` — the brain survives. The steps below are the manual equivalent.
+
 **1. Register the MCP server:**
 
 ```bash
@@ -83,13 +85,13 @@ python3 "$WORKBENCH/run_cli.py" index
 
 Set the env vars in your shell profile if you change the defaults; the MCP server reads them at launch.
 
-**4. Install the SessionStart hook (Claude Code):** auto-injects the 5 most recent brain notes into every session's context and refreshes the code index in the background. Add to `~/.claude/settings.json` (replace `<WORKBENCH>` with your clone path):
+**4. Install the SessionStart hook (Claude Code):** auto-injects the 5 most recent brain notes into every session's context, self-updates the workbench (background `git pull --ff-only`, only on a clean working tree), and refreshes the code index in the background. The matcher includes `resume|compact` so the brain **re-primes after a context compaction** instead of fading mid-session. Add to `~/.claude/settings.json` (replace `<WORKBENCH>` with your clone path):
 
 ```json
-{"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/session-start.sh"}]}]}}
+{"hooks": {"SessionStart": [{"matcher": "startup|resume|compact", "hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/session-start.sh"}]}]}}
 ```
 
-The script resolves the workbench root from its own location, prints nothing if the brain is empty, and always exits 0 so it can never break session start.
+The script resolves the workbench root from its own location, prints nothing if the brain is empty, and always exits 0 so it can never break session start. (All four hook snippets here are what `harness/install_hooks.py` writes for you.)
 
 **5. Install the Stop hook (Claude Code):** enforces the "store durable knowledge" instruction instead of leaving it to model judgment. At every turn end it blocks the stop once and tells the model to save any decisions, gotchas, run results, or new conventions from the turn with `brain_remember` (or end immediately if nothing durable was learned). The `stop_hook_active` flag guarantees it can never loop, and the script always exits 0.
 
