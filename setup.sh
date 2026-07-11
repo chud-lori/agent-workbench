@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One-shot setup for agent-workbench: registers the MCP server, installs the
-# standing instructions, wires the Claude Code hooks, and builds the code index.
+# standing instructions, wires the Claude Code hooks, links the Claude Code
+# skills, and builds the code index.
 # Idempotent — re-running upgrades in place and never duplicates anything.
 # Requires python3 >= 3.10; no other dependencies.
 set -euo pipefail
@@ -90,6 +91,23 @@ if [ "$DO_CLAUDE" = "y" ]; then
   fi
   install_instructions "$HOME/.claude/CLAUDE.md"
   python3 "$WORKBENCH/harness/install_hooks.py"
+
+  # Skills: symlink each harness/skills/<name> into ~/.claude/skills so repo
+  # updates flow through without re-running setup.
+  mkdir -p "$HOME/.claude/skills"
+  for skill_dir in "$WORKBENCH"/harness/skills/*/; do
+    [ -d "$skill_dir" ] || continue
+    skill_name="$(basename "$skill_dir")"
+    skill_link="$HOME/.claude/skills/$skill_name"
+    if [ -L "$skill_link" ] && [ "$(readlink "$skill_link")" = "${skill_dir%/}" ]; then
+      info "skill '$skill_name' already linked."
+    elif [ -e "$skill_link" ] || [ -L "$skill_link" ]; then
+      info "skill '$skill_name': $skill_link already exists and is not our symlink - left as is."
+    else
+      ln -s "${skill_dir%/}" "$skill_link"
+      info "linked skill '$skill_name' into ~/.claude/skills."
+    fi
+  done
 fi
 
 # --- Codex ---------------------------------------------------------------------

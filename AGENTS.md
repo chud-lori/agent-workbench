@@ -113,6 +113,14 @@ The script resolves the workbench root from its own location, prints nothing if 
 
 Together the hooks close the second-brain loop at the harness level: SessionStart primes, UserPromptSubmit recalls per-turn, Stop stores, PreToolUse guards. Cost: one extra short model pass per turn plus a few injected lines per prompt.
 
+**8. Install the brain-harvest skill (Claude Code):** the hooks capture knowledge from *interactive agent work*; `/brain-harvest` backfills everything else. Run it weekly: it scans your merged PRs (`gh`), resolved Jira tickets, and Slack activity for the past window, dedupes against existing brain notes, and proposes new notes — nothing is stored without your approval. Works with any model. Skill source: `harness/skills/brain-harvest/SKILL.md`; setup.sh symlinks it, or manually:
+
+```bash
+mkdir -p ~/.claude/skills && ln -s "$WORKBENCH/harness/skills/brain-harvest" ~/.claude/skills/brain-harvest
+```
+
+Requires the `gh` CLI (authenticated) plus the Atlassian and Slack MCPs for full coverage; missing sources are skipped with a note.
+
 ## Measuring the brain (blind replay)
 
 To prove (or debug) the memory's value, replay a task the team already finished: check out the repo pinned to just before the real fix (single branch, no remote), give the same prompt to the same model twice — once with the workbench MCP/hooks disabled, once enabled — and score both against the shipped fix and your conventions (correctness, rules followed, tool calls, tokens, wall time). Run it blind (no session memory of the original work). This also audits the brain itself: a replay that contradicts a stored note means the note needs `brain_amend`.

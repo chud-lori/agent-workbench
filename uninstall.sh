@@ -36,6 +36,14 @@ PY
 # --- Claude Code ---------------------------------------------------------------
 python3 "$WORKBENCH/harness/install_hooks.py" --remove
 remove_instructions "$HOME/.claude/CLAUDE.md"
+for skill_dir in "$WORKBENCH"/harness/skills/*/; do
+  [ -d "$skill_dir" ] || continue
+  skill_link="$HOME/.claude/skills/$(basename "$skill_dir")"
+  if [ -L "$skill_link" ] && [ "$(readlink "$skill_link")" = "${skill_dir%/}" ]; then
+    rm "$skill_link"
+    info "unlinked skill '$(basename "$skill_dir")' from ~/.claude/skills."
+  fi
+done
 if command -v claude >/dev/null 2>&1 && claude mcp get agent-workbench >/dev/null 2>&1; then
   claude mcp remove --scope user agent-workbench
   info "unregistered MCP 'agent-workbench' from Claude Code."
