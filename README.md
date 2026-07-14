@@ -1,6 +1,24 @@
-# Agent Workbench
+<p align="center">
+  <img src="assets/logo.svg" alt="Agent Workbench logo" width="140">
+</p>
 
-**A local, dependency-free memory and context layer for AI coding agents (Claude Code, Codex, Gemini CLI).**
+<h1 align="center">Agent Workbench</h1>
+
+<p align="center">
+  <b>A local, dependency-free memory and context layer for AI coding agents<br>(Claude Code, Codex, Gemini CLI).</b>
+</p>
+
+<p align="center">
+  <a href="https://chud-lori.github.io/agent-workbench/">Website</a> ·
+  <a href="AGENTS.md">Agent guide</a> ·
+  <a href="ARCHITECTURE.md">Architecture</a>
+</p>
+
+<p align="center">
+  <img alt="Python ≥3.10, stdlib only" src="https://img.shields.io/badge/python-%E2%89%A53.10%20stdlib--only-3776AB?logo=python&logoColor=white">
+  <img alt="MCP server" src="https://img.shields.io/badge/MCP-stdio%20server-6d28d9">
+  <img alt="No LLM calls" src="https://img.shields.io/badge/LLM%20calls-none-2ea043">
+</p>
 
 Agent Workbench gives every agent session on your machine three things they normally lack:
 
