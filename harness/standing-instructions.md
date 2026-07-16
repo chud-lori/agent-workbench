@@ -11,7 +11,8 @@ Local MCP with a code index over your repo root, persistent cross-tool memory ("
 - When a stored note or convention decides something, attribute it in one short line (`brain#42: <the rule>`) so the human knows a recorded rule applied — one line, no lecture.
 - Scale verification to the diff (proportional diligence): a small isolated fix needs one proving grep/check, not an audit; save the full checklist for schema/shared/cross-service changes.
 - When a stored todo is done, mark it with `brain_resolve` (do not forget it — history matters). Resolved notes are hidden from default `brain_recall`; pass `include_resolved` to see them.
-- Before re-deriving past decisions or cross-repo conventions, check `brain_recall`; pass `thread=<tag/key/keyword>` for a chronological digest of one storyline.
+- Before re-deriving past decisions or cross-repo conventions, check `brain_recall`; pass `thread=<tag/key/keyword>` for a chronological digest of one storyline, or `since=`/`until=` (`'yesterday'`, `'2026-07-15'`, `'7d'`) to bound by when notes were stored.
+- The brain holds durable facts, not an activity log — never answer "what did I do yesterday / this week?" from `brain_recall`. Use `recent_activity` (commits across every local repo, all branches) for the git evidence, and merge it with Slack, calendar, and PRs (the `/standup` skill does this). A day with no commits is not a day with no work.
 - Before claiming how production behaves or writing prod patch queries, run `repo_state` on the repo — local checkouts often sit on feature branches with undeployed changes; verify against `origin/main`.
 - Back up the brain periodically with `brain_export` (dumps all notes to markdown).
 - On a stale-index warning from `code_search`/`brief_task`, run `refresh_code_index`.

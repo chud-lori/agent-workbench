@@ -4,6 +4,7 @@ import json
 import sys
 from typing import Any, Callable
 
+from .activity import recent_activity
 from .brain import amend, export, forget, promote, recall, remember, resolve
 from .code_index import code_search, codebase_overview, index_status, rebuild_index, refresh_index
 from .config import default_config
@@ -88,7 +89,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         },
     },
     "brain_recall": {
-        "description": "Search saved brain notes by query/project/kind; omit query to list most recent notes. Superseded notes are hidden unless include_superseded. Pass thread=<tag/key/keyword> for a chronological digest of every note on that storyline (superseded collapsed to stubs).",
+        "description": "Search saved brain notes by query/project/kind; omit query to list most recent notes. Bound by when notes were stored with since/until ('yesterday', '2026-07-15', '7d'). Superseded notes are hidden unless include_superseded. Pass thread=<tag/key/keyword> for a chronological digest of every note on that storyline (superseded collapsed to stubs). Note: the brain holds durable facts, not an activity log — for what you actually did in a window, use recent_activity.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -99,6 +100,14 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "include_resolved": {"type": "boolean"},
                 "include_superseded": {"type": "boolean"},
                 "thread": {"type": "string", "description": "Tag, issue key, or keyword to digest chronologically"},
+                "since": {
+                    "type": "string",
+                    "description": "Only notes stored at/after this: YYYY-MM-DD, ISO timestamp, 'today', 'yesterday', or 'Nd'/'Nh'/'Nw' ago. Filters before `limit`, so nothing is silently dropped.",
+                },
+                "until": {
+                    "type": "string",
+                    "description": "Only notes stored at/before this (inclusive; a bare date covers that whole day).",
+                },
             },
             "additionalProperties": False,
         },
@@ -188,6 +197,37 @@ TOOLS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
+    "recent_activity": {
+        "description": (
+            "What you committed in a time window, across every local repo (scans all branches, so "
+            "unpushed work that `gh` cannot see still shows up). The git evidence for standups and "
+            '"what did I do yesterday?" — commits only; pair it with Slack/calendar/PR lookups for a '
+            "full picture, since this server has no network access."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "since": {
+                    "type": "string",
+                    "description": "Start of window: YYYY-MM-DD, ISO timestamp, 'today', 'yesterday', or 'Nd'/'Nh'/'Nw' ago. Default 'yesterday'.",
+                },
+                "until": {
+                    "type": "string",
+                    "description": "End of window (inclusive; a bare date covers that whole day). Omit for 'up to now'.",
+                },
+                "author": {
+                    "type": "string",
+                    "description": "Author name/email substring. Defaults per-repo to that repo's git config user.email.",
+                },
+                "roots": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Override the directories scanned. Defaults to the index roots plus the projects root.",
+                },
+            },
+            "additionalProperties": False,
+        },
+    },
 }
 
 
@@ -227,8 +267,17 @@ def serve() -> int:
             default_config(),
             thread=args.get("thread"),
             include_superseded=args.get("include_superseded", False),
+            since=args.get("since"),
+            until=args.get("until"),
         ),
         "repo_state": lambda args: repo_state(args.get("repo", ""), default_config()),
+        "recent_activity": lambda args: recent_activity(
+            args.get("since", "yesterday"),
+            args.get("until"),
+            args.get("author"),
+            args.get("roots"),
+            default_config(),
+        ),
         "brain_forget": lambda args: forget(args.get("id", 0), default_config()),
         "brain_resolve": lambda args: resolve(args.get("id", 0), default_config()),
         "brain_export": lambda args: export(args.get("path"), default_config()),
@@ -261,7 +310,7 @@ def _handle_request(request: dict[str, Any], handlers: dict[str, ToolHandler]) -
             "result": {
                 "protocolVersion": client_version if client_version == PROTOCOL_VERSION else PROTOCOL_VERSION,
                 "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "agent-workbench", "version": "0.3.0"},
+                "serverInfo": {"name": "agent-workbench", "version": "0.4.0"},
                 "instructions": (
                     "Agent Workbench: local setup diagnostics, an FTS code index over ~/repo, and a persistent brain. "
                     "Start a task with brief_task (merges code hits, docs, brain notes, and pinned references). "

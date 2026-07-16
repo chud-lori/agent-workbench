@@ -17,7 +17,8 @@ New machine? See **Harness setup** below to register the MCP and install the sta
    - Every note must include a source reference — a ticket key, Slack channel + date, doc name, file path, or for code on GitHub a permalink pinned to a commit SHA (`repo@sha path:line`; branch links rot). Notes without breadcrumbs are dead ends.
    - Never store secrets, tokens, or anything trivially derivable from the code itself.
 3. **Correct, don't contradict**: when new knowledge corrects or extends an earlier note, use `brain_amend` (append a dated addendum, or replace the body) or re-store with `supersedes=[ids]` — superseded notes are hidden from default recall so stale claims can't resurface as truth. `brain_remember` returns `similar_notes` when it spots likely overlap; review them before stacking a near-duplicate.
-4. **Recall before re-deriving**: before answering questions about past decisions or cross-repo conventions, check `brain_recall` (query, or filter by `project`/`kind`). Pass `thread=<tag/key/keyword>` for a chronological digest of one storyline (superseded collapsed to stubs). When a stored todo is done, mark it with `brain_resolve` (do not forget it — history matters); resolved notes are hidden from default recall unless you pass `include_resolved`. Back up the brain with `brain_export`.
+4. **Recall before re-deriving**: before answering questions about past decisions or cross-repo conventions, check `brain_recall` (query, or filter by `project`/`kind`). Pass `thread=<tag/key/keyword>` for a chronological digest of one storyline (superseded collapsed to stubs), or `since=`/`until=` (`'yesterday'`, `'2026-07-15'`, `'7d'`) to bound by when notes were stored. When a stored todo is done, mark it with `brain_resolve` (do not forget it — history matters); resolved notes are hidden from default recall unless you pass `include_resolved`. Back up the brain with `brain_export`.
+   - The brain is a store of durable facts, **not an activity log**. "What did I do yesterday?" is not a recall question: use `recent_activity` for the git evidence and the `/standup` skill to merge it with Slack, calendar, and PRs.
 5. **Pin canonical sources**: store runbooks, wiki pages, dashboards as `kind=reference` notes (title + key sections + URL/page id). They surface in `brain_recall` and as `pinned_references` in `brief_task`.
 5b. **Promote what proves general**: the brain is personal; teams share through git-versioned markdown. When a personal note proves broadly useful (a gotcha others will hit, a convention), `brain_promote` it into the team's reference file/playbook and open a PR there. Evidence and one-off details stay personal.
 5c. **Attribute rules**: when a stored note or convention decides something in your work, say so in one short line — `brain#42: this repo ships without unit tests` — so the human knows it was a recorded rule, not a whim.
@@ -30,12 +31,13 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 | Tool | Use |
 |---|---|
 | `brief_task` | one-call task context pack (code + docs + brain + pinned references + commands; warns on prod-divergent repos) |
-| `brain_remember` / `brain_recall` / `brain_forget` | persistent cross-session, cross-tool memory (`supersedes=[ids]` retires corrected notes; `thread=` digests a storyline) |
+| `brain_remember` / `brain_recall` / `brain_forget` | persistent cross-session, cross-tool memory (`supersedes=[ids]` retires corrected notes; `thread=` digests a storyline; `since=`/`until=` bounds by when a note was stored) |
 | `brain_amend` | correct/extend an existing note in place (append a dated addendum or replace) |
 | `brain_promote` | append a proven note to a shared, git-versioned markdown reference (team playbook); stamps the note so it promotes once |
 | `brain_resolve` | mark a todo/note resolved (hidden from default recall; `include_resolved` shows it) |
 | `brain_export` | dump all brain notes to markdown (backup) |
 | `repo_state` | branch + ahead/behind origin/main|master + dirty/staleness for a repo — run before prod-behavior claims |
+| `recent_activity` | commits you made in a time window across every local repo (all branches, so unpushed work shows) — the git half of "what did I do yesterday?" |
 | `code_search` | bm25 keyword search over indexed repos |
 | `codebase_overview` | languages/package files/docs per indexed repo |
 | `search_knowledge` | live search over CLAUDE.md/AGENTS.md/SKILL.md/READMEs |
@@ -120,6 +122,14 @@ mkdir -p ~/.claude/skills && ln -s "$WORKBENCH/harness/skills/brain-harvest" ~/.
 ```
 
 Requires the `gh` CLI (authenticated) plus the Atlassian and Slack MCPs for full coverage; missing sources are skipped with a note.
+
+**9. Install the standup skill (Claude Code):** `/standup` answers "what did I do yesterday?" — the one question the brain cannot answer, because it stores durable facts rather than an activity log. It merges four sources the model fans out over: `recent_activity` (git, incl. unpushed branches), `gh` PRs, Slack, and Google Calendar, then verifies threads before writing a paste-ready Done / Today / Blockers summary. setup.sh symlinks every directory under `harness/skills/`, so it installs alongside brain-harvest; manually:
+
+```bash
+mkdir -p ~/.claude/skills && ln -s "$WORKBENCH/harness/skills/standup" ~/.claude/skills/standup
+```
+
+Degrades cleanly: any missing source is skipped and called out, since a silently absent source reads as "nothing happened there."
 
 ## Measuring the brain (blind replay)
 

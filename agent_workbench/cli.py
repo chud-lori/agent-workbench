@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from .activity import recent_activity
 from .brain import amend, export, forget, promote, recall, remember, resolve
 from .code_index import code_search, codebase_overview, index_status, rebuild_index, refresh_index
 from .config import WorkbenchConfig, default_config
@@ -93,6 +94,8 @@ def main(argv: list[str] | None = None) -> int:
     recall_cmd.add_argument("--all", action="store_true", help="Include resolved notes")
     recall_cmd.add_argument("--superseded", action="store_true", help="Include superseded notes")
     recall_cmd.add_argument("--thread", default=None, help="Digest all notes on a tag/key/keyword chronologically")
+    recall_cmd.add_argument("--since", default=None, help="Only notes stored at/after: YYYY-MM-DD, 'yesterday', '7d'")
+    recall_cmd.add_argument("--until", default=None, help="Only notes stored at/before (a bare date covers that whole day)")
 
     recall_brief_cmd = sub.add_parser(
         "recall-brief", help="Compact top-hit note lines for a prompt (used by the UserPromptSubmit hook)"
@@ -101,6 +104,13 @@ def main(argv: list[str] | None = None) -> int:
 
     repo_state_cmd = sub.add_parser("repo-state", help="Show a repo's branch/divergence vs origin/main")
     repo_state_cmd.add_argument("repo")
+
+    activity_cmd = sub.add_parser("activity", help="Commits you made in a window, across every local repo")
+    activity_cmd.add_argument("--since", default="yesterday", help="YYYY-MM-DD, ISO, 'today', 'yesterday', or 'Nd'/'Nh'/'Nw' (default: yesterday)")
+    activity_cmd.add_argument("--until", default=None, help="Inclusive end; a bare date covers that whole day")
+    activity_cmd.add_argument("--author", default=None, help="Author name/email (default: each repo's git config user.email)")
+    activity_cmd.add_argument("--root", action="append", dest="roots", default=None, help="Override scanned dirs (repeatable)")
+    activity_cmd.add_argument("--json", action="store_true")
 
     forget_cmd = sub.add_parser("forget", help="Delete a brain note by id")
     forget_cmd.add_argument("id", type=int)
@@ -170,6 +180,8 @@ def main(argv: list[str] | None = None) -> int:
                     config,
                     thread=args.thread,
                     include_superseded=args.superseded,
+                    since=args.since,
+                    until=args.until,
                 )
             )
         )
@@ -179,6 +191,9 @@ def main(argv: list[str] | None = None) -> int:
             print(brief_text)
     elif args.command == "repo-state":
         print(dump_json(repo_state(args.repo, config)))
+    elif args.command == "activity":
+        report = recent_activity(args.since, args.until, args.author, args.roots, config)
+        print(dump_json(report) if args.json else _format_activity(report))
     elif args.command == "forget":
         print(dump_json(forget(args.id, config)))
     elif args.command == "resolve":
@@ -215,6 +230,25 @@ def _recall_brief(prompt: str, config: WorkbenchConfig) -> str:
             content = content[:150].rstrip() + "..."
         project = note.get("project") or "-"
         lines.append(f"- [{note.get('kind', 'note')}#{note.get('id', '?')}] ({project}) {content}")
+    return "\n".join(lines)
+
+
+def _format_activity(report: dict) -> str:
+    if report.get("error"):
+        return f"Error: {report['error']}"
+    window = report.get("window", {})
+    lines = [f"Commits {window.get('since')} .. {window.get('until') or 'now'}"]
+    lines.append(
+        f"{report['total_commits']} commit(s) in {report['repos_with_activity']}/{report['repos_scanned']} repo(s)"
+    )
+    for repo in report.get("repos", []):
+        lines.append("")
+        lines.append(f"{repo['repo']} ({repo['commit_count']}) [{repo['branch']}]")
+        for commit in repo["commits"]:
+            lines.append(f"  {commit['sha']}  {commit['at'][:16].replace('T', ' ')}  {commit['subject']}")
+    for key in ("hint", "note"):
+        if report.get(key):
+            lines.extend(["", report[key]])
     return "\n".join(lines)
 
 

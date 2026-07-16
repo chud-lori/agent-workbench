@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import WorkbenchConfig, default_config
+from .util import parse_time_bound
 
 
 VALID_KINDS = {"decision", "fact", "gotcha", "preference", "todo", "note", "reference"}
@@ -115,10 +116,26 @@ def recall(
     *,
     thread: str | None = None,
     include_superseded: bool = False,
+    since: str | int | None = None,
+    until: str | int | None = None,
 ) -> dict[str, Any]:
+    """Search notes, optionally bounded to when they were stored.
+
+    since/until filter on created_at in SQL, i.e. *before* `limit` truncates —
+    otherwise a busy recent day would push older notes past the cap and an
+    empty result would read as "nothing happened" rather than "truncated".
+    When the cap is actually hit, the result says so via `truncated`.
+    """
     config = config or default_config()
     if not config.brain_path.exists():
         return {"query": query, "notes": [], "warning": "brain is empty; store notes with brain_remember"}
+    try:
+        since_epoch = parse_time_bound(since)
+        until_epoch = parse_time_bound(until, end_of_day=True)
+    except ValueError as exc:
+        return {"query": query, "notes": [], "error": str(exc)}
+    if since_epoch is not None and until_epoch is not None and since_epoch > until_epoch:
+        return {"query": query, "notes": [], "error": f"since ({since!r}) is after until ({until!r})"}
     conn = _connect(config)
     conn.row_factory = sqlite3.Row
     try:
@@ -129,6 +146,12 @@ def recall(
         if query and query.strip():
             clauses.append("notes match ?")
             params.append(_fts_query(query))
+        if since_epoch is not None:
+            clauses.append("created_at >= ?")
+            params.append(since_epoch)
+        if until_epoch is not None:
+            clauses.append("created_at <= ?")
+            params.append(until_epoch)
         if project:
             clauses.append("coalesce(project,'') = ?")
             params.append(project)
@@ -147,11 +170,26 @@ def recall(
             (*params, limit),
         ).fetchall()
         total = conn.execute("select count(*) from notes").fetchone()[0]
-        return {
+        result: dict[str, Any] = {
             "query": query,
             "total_notes": total,
             "notes": [_note_dict(row) for row in rows],
         }
+        if since_epoch is not None or until_epoch is not None:
+            result["window"] = {
+                "since": _iso(since_epoch) if since_epoch is not None else None,
+                "until": _iso(until_epoch) if until_epoch is not None else None,
+                "matched_in_window": conn.execute(
+                    f"select count(*) from notes {where}", tuple(params)
+                ).fetchone()[0],
+            }
+        if len(rows) == limit:
+            result["truncated"] = True
+            result["hint"] = (
+                f"hit the limit of {limit} — more notes match than are shown. "
+                "Raise limit (or narrow since/until) before concluding anything from this set."
+            )
+        return result
     except sqlite3.OperationalError as exc:
         return {"query": query, "notes": [], "error": str(exc)}
     finally:
@@ -413,12 +451,16 @@ def _migrate(conn: sqlite3.Connection) -> None:
         raise
 
 
+def _iso(epoch: int) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(epoch))
+
+
 def _note_dict(row: sqlite3.Row) -> dict[str, Any]:
     note = dict(row)
     note["tags"] = row["tags"].split() if row["tags"] else []
-    note["created_at_iso"] = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(row["created_at"]))
+    note["created_at_iso"] = _iso(row["created_at"])
     if note.get("resolved_at"):
-        note["resolved_at_iso"] = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(note["resolved_at"]))
+        note["resolved_at_iso"] = _iso(note["resolved_at"])
     if not note.get("superseded_by"):
         note.pop("superseded_by", None)
     return note

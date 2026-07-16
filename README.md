@@ -58,7 +58,7 @@ Everything is driven by environment variables with sensible defaults — nothing
 **Brain (persistent cross-tool memory):**
 
 - `brain_remember` — store a durable note (`decision` / `fact` / `gotcha` / `preference` / `todo` / `note`) with project + tags; convention: every note carries a source reference (ticket key, Slack thread, doc, or SHA-pinned permalink)
-- `brain_recall` — FTS search with porter stemming; recent notes when no query; resolved notes hidden by default
+- `brain_recall` — FTS search with porter stemming; recent notes when no query; resolved notes hidden by default; `since`/`until` bound by when a note was stored (`'yesterday'`, `'2026-07-15'`, `'7d'`)
 - `brain_resolve` / `brain_forget` — mark done (kept, hidden) / delete
 - `brain_export` — dump all notes to markdown (your backup)
 
@@ -69,6 +69,10 @@ Everything is driven by environment variables with sensible defaults — nothing
 - `codebase_overview` — languages, package files, docs per repo
 - `search_knowledge` — live search over agent docs (CLAUDE.md, AGENTS.md, SKILL.md, READMEs)
 - `find_service_context` — locate the repo + commands for a service name
+
+**Activity:**
+
+- `recent_activity` — commits you made in a time window across every local repo; scans all branches, so unpushed work `gh` cannot see still shows up. The git half of "what did I do yesterday?" — the `/standup` skill merges it with Slack, calendar, and PRs, because the brain stores durable facts, not an activity log.
 
 **Orchestrator:**
 

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
+from datetime import datetime, time as day_time, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -90,6 +92,67 @@ def iter_files(
                     yield path
                 elif suffixes and path.suffix.lower() in suffixes:
                     yield path
+
+
+_RELATIVE_BOUND = re.compile(r"(\d+)([dhw])")
+_RELATIVE_UNITS = {"d": "days", "h": "hours", "w": "weeks"}
+
+
+def parse_time_bound(
+    value: str | int | float | None,
+    *,
+    end_of_day: bool = False,
+    now: float | None = None,
+) -> int | None:
+    """Parse a date/time bound to a local-time epoch, or None if value is None.
+
+    Accepts an epoch number, 'YYYY-MM-DD', an ISO timestamp, or the relative
+    shorthands 'today' / 'yesterday' / 'Nd' | 'Nh' | 'Nw' (N ago). Raises
+    ValueError on anything else — callers surface it rather than silently
+    scanning the wrong window.
+
+    Bare dates are day-aligned, and end_of_day snaps to 23:59:59 so that
+    until='2026-07-15' covers all of 15 Jul instead of cutting at midnight.
+    Pairing since='yesterday' with until='yesterday' therefore spans exactly
+    that one day.
+
+    Always returns int: sqlite compares an int param against the integer
+    created_at column, but a *string* epoch matches zero rows silently.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError(f"not a time bound: {value!r}")
+    if isinstance(value, (int, float)):
+        return int(value)
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    base = datetime.fromtimestamp(now) if now is not None else datetime.now()
+
+    if text in {"today", "yesterday"}:
+        day = base.date() if text == "today" else (base - timedelta(days=1)).date()
+        return _day_epoch(day, end_of_day)
+    relative = _RELATIVE_BOUND.fullmatch(text)
+    if relative:
+        unit = _RELATIVE_UNITS[relative.group(2)]
+        return int((base - timedelta(**{unit: int(relative.group(1))})).timestamp())
+    try:
+        return _day_epoch(datetime.strptime(text, "%Y-%m-%d").date(), end_of_day)
+    except ValueError:
+        pass
+    try:
+        return int(datetime.fromisoformat(text).timestamp())
+    except ValueError as exc:
+        raise ValueError(
+            f"unrecognized time bound {value!r}; use YYYY-MM-DD, an ISO timestamp, "
+            "'today', 'yesterday', or 'Nd'/'Nh'/'Nw'"
+        ) from exc
+
+
+def _day_epoch(day: Any, end_of_day: bool) -> int:
+    moment = datetime.combine(day, day_time(23, 59, 59) if end_of_day else day_time(0, 0, 0))
+    return int(moment.timestamp())
 
 
 def run_capture(args: list[str], cwd: Path | None = None, timeout: float = 10) -> tuple[int, str, str]:
