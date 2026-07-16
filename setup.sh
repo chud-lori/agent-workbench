@@ -166,6 +166,28 @@ if [ "$DO_CLAUDE" = "y" ] && [ ! -f "$WORKBENCH/.state/guard-patterns.txt" ]; th
   fi
 fi
 
+# --- Companion plugins (optional, third-party, installed from upstream) ---------
+# Not vendored: these are maintained elsewhere and install with their own
+# installers. setup.sh just offers them so a new machine is one command.
+if [ "$DO_CLAUDE" = "y" ]; then
+  step "Companion plugins (optional)"
+  if command -v node >/dev/null 2>&1 && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 18 ]; then
+    if ask "Install caveman (concise agent output, github.com/JuliusBrussee/caveman)?" "n"; then
+      # Run from $HOME: with a repo as CWD the installer also writes per-repo
+      # .agents/ rule files into it. Its Gemini step prompts for trust, so a
+      # closed stdin hangs it — keep this step interactive-only (ask already
+      # defaults to no when non-interactive).
+      (cd "$HOME" && curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash) \
+        && info "caveman installed." || info "caveman install failed - re-run its installer manually."
+    fi
+  else
+    info "node >=18 not found - skipping companion plugin offers (caveman needs it)."
+  fi
+  info "ponytail (minimalist code generation) installs from inside Claude Code - two separate prompts:"
+  info "  /plugin marketplace add DietrichGebert/ponytail"
+  info "  /plugin install ponytail@ponytail"
+fi
+
 # --- Code index ------------------------------------------------------------------
 step "Code index"
 info "index roots: \${AGENT_WORKBENCH_REPO_ROOT:-~/repo} (override via env before re-running)"
