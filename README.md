@@ -83,6 +83,16 @@ Everything is driven by environment variables with sensible defaults — nothing
 - `doctor_report` — secrets on disk, broken MCP configs, broad permissions, stale docs
 - `mcp_health` / `work_sources_status` — MCP config checks / connector sidecar health
 
+## Skills (Claude Code)
+
+Five skills under `harness/skills/` share one pattern: gather from every work source in parallel, verify threads before presenting, cite a surface for every line. setup.sh symlinks them into `~/.claude/skills/`.
+
+- `/standup` — "what did I do yesterday?" from git + PRs + Slack + calendar + brain, as paste-ready Done / Today / Blockers
+- `/brain-harvest` — weekly backfill: scan merged PRs, resolved tickets, and Slack for durable knowledge the hooks missed; approval-gated
+- `/postmortem` — incident reconstruction: evidence timeline, blameless five-whys, action items with owners; proposes one root-cause gotcha for the brain
+- `/why` — code archaeology: blame → commit → PR → ticket → Slack → brain, answering "why does this code exist" with a cited chain
+- `/meeting-prep` — one-page brief for the next calendar event: what changed since last time, what you owe / are owed, likely topics
+
 ## CLI
 
 Every tool has a CLI equivalent for shells, cron jobs, and hooks:

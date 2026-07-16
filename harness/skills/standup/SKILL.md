@@ -86,7 +86,3 @@ Keep it paste-ready and plain. Cite a surface for every Done line so anyone can 
 ## 5. This is personal — do not store it
 
 A standup is a summary of one day, not durable knowledge. **Do not `brain_remember` the standup itself**, and do not promote it to shared references. If the day surfaced something genuinely durable — a root cause, a decision with a why, a gotcha — that is a normal `brain_remember` with its own source reference, separate from the standup.
-
-## Provenance
-
-The procedure (two-source rule, `on:` bounding, thread verification, Done/Today/Blockers) is adapted from `99-uncle`'s `references/daily-standup.md`, pinned as brain `reference#223`. Calendar is an addition — Uncle pulls Slack + git only and misses meetings entirely.

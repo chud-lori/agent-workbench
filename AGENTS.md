@@ -131,6 +131,19 @@ mkdir -p ~/.claude/skills && ln -s "$WORKBENCH/harness/skills/standup" ~/.claude
 
 Degrades cleanly: any missing source is skipped and called out, since a silently absent source reads as "nothing happened there."
 
+**10. Install the evidence skills (Claude Code):** three more skills follow the same fan-out-and-verify pattern as `/standup` — gather from every source in parallel, verify threads before presenting, cite a surface for every line:
+
+- `/postmortem` — reconstruct an incident from Slack + `recent_activity` + deploys + PRs + tickets into a timeline (cause introduced → detected → mitigated → resolved), a blameless five-whys, and a draft with owned action items. Ends by *proposing* one root-cause `gotcha` for the brain — approval-gated.
+- `/why` — code archaeology: climb blame → commit → PR → ticket → Slack → brain to answer "why does this code exist", with a cited evidence chain and an honest "no recorded reason survives" when the chain dead-ends.
+- `/meeting-prep` — one-page brief for the next calendar event: agenda + what changed since last occurrence + what you owe / are owed + likely topics, from calendar, Slack, Jira, PRs, and brain notes.
+
+setup.sh symlinks every directory under `harness/skills/`, so these install with the rest; manually:
+
+```bash
+mkdir -p ~/.claude/skills
+for s in postmortem why meeting-prep; do ln -s "$WORKBENCH/harness/skills/$s" ~/.claude/skills/$s; done
+```
+
 ## Measuring the brain (blind replay)
 
 To prove (or debug) the memory's value, replay a task the team already finished: check out the repo pinned to just before the real fix (single branch, no remote), give the same prompt to the same model twice — once with the workbench MCP/hooks disabled, once enabled — and score both against the shipped fix and your conventions (correctness, rules followed, tool calls, tokens, wall time). Run it blind (no session memory of the original work). This also audits the brain itself: a replay that contradicts a stored note means the note needs `brain_amend`.
