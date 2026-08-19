@@ -108,6 +108,45 @@ if [ "$DO_CLAUDE" = "y" ]; then
       info "linked skill '$skill_name' into ~/.claude/skills."
     fi
   done
+
+  # Agents: symlink each harness/agents/<name>.md into ~/.claude/agents. These
+  # are brain-primed subagent types - a subagent gets no SessionStart/prompt
+  # hook, so recall has to live in its own system prompt or it never happens.
+  mkdir -p "$HOME/.claude/agents"
+  for agent_file in "$WORKBENCH"/harness/agents/*.md; do
+    [ -f "$agent_file" ] || continue
+    agent_name="$(basename "$agent_file")"
+    agent_link="$HOME/.claude/agents/$agent_name"
+    if [ -L "$agent_link" ] && [ "$(readlink "$agent_link")" = "$agent_file" ]; then
+      info "agent '$agent_name' already linked."
+    elif [ -e "$agent_link" ] || [ -L "$agent_link" ]; then
+      info "agent '$agent_name': $agent_link already exists and is not our symlink - left as is."
+    else
+      ln -s "$agent_file" "$agent_link"
+      info "linked agent '$agent_name' into ~/.claude/agents."
+    fi
+  done
+
+  # Transcript retention: Claude Code prunes ~/.claude/projects after
+  # cleanupPeriodDays (default 30), so session history silently evaporates.
+  python3 - "$HOME/.claude/settings.json" <<'PYEOF'
+import json, sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    cfg = json.loads(path.read_text())
+except (OSError, ValueError):
+    cfg = {}
+current = cfg.get("cleanupPeriodDays")
+if current is None:
+    cfg["cleanupPeriodDays"] = 3650
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(cfg, indent=2) + "\n")
+    print("set cleanupPeriodDays=3650 (was unset; default 30 deletes transcripts)")
+else:
+    print(f"cleanupPeriodDays already set to {current} - left as is.")
+PYEOF
 fi
 
 # --- Codex ---------------------------------------------------------------------

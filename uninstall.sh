@@ -44,6 +44,15 @@ for skill_dir in "$WORKBENCH"/harness/skills/*/; do
     info "unlinked skill '$(basename "$skill_dir")' from ~/.claude/skills."
   fi
 done
+
+for agent_file in "$WORKBENCH"/harness/agents/*.md; do
+  [ -f "$agent_file" ] || continue
+  agent_link="$HOME/.claude/agents/$(basename "$agent_file")"
+  if [ -L "$agent_link" ] && [ "$(readlink "$agent_link")" = "$agent_file" ]; then
+    rm "$agent_link"
+    info "unlinked agent '$(basename "$agent_file")' from ~/.claude/agents."
+  fi
+done
 if command -v claude >/dev/null 2>&1 && claude mcp get agent-workbench >/dev/null 2>&1; then
   claude mcp remove --scope user agent-workbench
   info "unregistered MCP 'agent-workbench' from Claude Code."

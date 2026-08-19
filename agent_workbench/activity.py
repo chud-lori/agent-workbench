@@ -6,7 +6,7 @@ from typing import Any
 
 from .code_index import _repo_roots
 from .config import WorkbenchConfig, default_config
-from .repo_state import _git
+from .repo_state import _git, git_common_dir, is_linked_worktree, main_worktree
 from .util import parse_time_bound
 
 
@@ -56,7 +56,28 @@ def recent_activity(
     active: list[dict[str, Any]] = []
     scanned = 0
     truncated_repos: list[str] = []
+    # A linked worktree shares all history with its main checkout, so scanning
+    # both counts every commit twice. Key on the shared git dir and keep the
+    # main checkout as the repo's identity, noting which worktrees were folded
+    # in — the branch a worktree sits on is still worth reporting.
+    seen_repos: dict[str, Path] = {}
+    worktrees: dict[str, list[dict[str, str]]] = {}
     for repo in repos:
+        if not (repo / ".git").exists():
+            continue
+        key = git_common_dir(repo) or str(repo.resolve())
+        if is_linked_worktree(repo):
+            worktrees.setdefault(key, []).append(
+                {"path": str(repo), "branch": _git(repo, "rev-parse", "--abbrev-ref", "HEAD")}
+            )
+        if key in seen_repos:
+            # Prefer the main checkout as the canonical path for this repo.
+            if not is_linked_worktree(repo):
+                seen_repos[key] = repo
+            continue
+        seen_repos[key] = repo if not is_linked_worktree(repo) else main_worktree(repo)
+
+    for key, repo in seen_repos.items():
         if not (repo / ".git").exists():
             continue
         scanned += 1
@@ -69,15 +90,18 @@ def recent_activity(
         if len(commits) > _MAX_COMMITS_PER_REPO:
             truncated_repos.append(repo.name)
             commits = commits[:_MAX_COMMITS_PER_REPO]
-        active.append(
-            {
-                "repo": repo.name,
-                "path": str(repo),
-                "branch": _git(repo, "rev-parse", "--abbrev-ref", "HEAD"),
-                "commit_count": len(commits),
-                "commits": commits,
-            }
-        )
+        entry: dict[str, Any] = {
+            "repo": repo.name,
+            "path": str(repo),
+            "branch": _git(repo, "rev-parse", "--abbrev-ref", "HEAD"),
+            "commit_count": len(commits),
+            "commits": commits,
+        }
+        if worktrees.get(key):
+            # --all already covered these commits; list the trees so the human
+            # knows parallel work happened and on which branches.
+            entry["worktrees"] = worktrees[key]
+        active.append(entry)
 
     result: dict[str, Any] = {
         "window": {"since": since_arg, "until": until_arg},

@@ -36,7 +36,7 @@ cd agent-workbench
 ./setup.sh
 ```
 
-`setup.sh` detects your harnesses (Claude Code / Codex / Gemini CLI), registers the MCP server, installs the standing instructions (marker-fenced, so re-runs refresh in place), wires the four Claude Code hooks, and builds the code index. Idempotent — re-run it anytime. `./uninstall.sh` reverses everything but keeps `.state/` (your brain).
+`setup.sh` detects your harnesses (Claude Code / Codex / Gemini CLI), registers the MCP server, installs the standing instructions (marker-fenced, so re-runs refresh in place), wires the four Claude Code hooks, links the skills and agent types, raises Claude Code's transcript retention off its 30-day default, and builds the code index. Idempotent — re-run it anytime. `./uninstall.sh` reverses everything but keeps `.state/` (your brain).
 
 Manual per-harness steps (if you'd rather not run the script) are in [AGENTS.md → Harness setup](AGENTS.md).
 
@@ -93,6 +93,17 @@ Five skills under `harness/skills/` share one pattern: gather from every work so
 - `/why` — code archaeology: blame → commit → PR → ticket → Slack → brain, answering "why does this code exist" with a cited chain
 - `/meeting-prep` — one-page brief for the next calendar event: what changed since last time, what you owe / are owed, likely topics
 
+## Agent types (Claude Code)
+
+Subagents get no hooks and none of the parent's context, so brain recall has to
+live in their own system prompt. `harness/agents/` ships three types that do:
+
+- `scout` — read-only investigator; recalls notes before searching the filesystem, cites `path:line` and `brain#id`
+- `implementer` — implements against recorded decisions/gotchas/preferences, matches surrounding style, verifies with the project's own checks
+- `adversary` — loads known failure modes first, then reviews a diff for findings with a concrete failure scenario
+
+setup.sh symlinks them into `~/.claude/agents/`.
+
 ## CLI
 
 Every tool has a CLI equivalent for shells, cron jobs, and hooks:
@@ -116,6 +127,7 @@ python3 run_cli.py mcp-server         # what the MCP registration runs
 ## Design notes
 
 - **Lexical, not RAG.** Retrieval is SQLite FTS5 + bm25 — exact, explainable, zero-dependency. Query expansion and synthesis are the LLM's job; brain notes carry source breadcrumbs the agent can follow into Jira/Slack/GitHub via their own MCPs.
+- **Worktree-aware.** Repos are identified by their shared git dir, so a linked worktree is folded into its main checkout: commits are counted once, the index keeps one checkout per repository, and `repo_state` tells an agent when it is standing in a worktree.
 - **State is local and disposable.** Everything lives in `.state/` (gitignored): `index.sqlite` is rebuildable anytime; `brain.sqlite` is the only thing worth backing up (`brain_export`).
 - **Instruction-based vs hook-enforced.** Standing instructions make agents *likely* to use the brain; the SessionStart hook makes recall *guaranteed*. Use both.
 

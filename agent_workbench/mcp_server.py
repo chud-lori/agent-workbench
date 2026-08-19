@@ -310,7 +310,7 @@ def _handle_request(request: dict[str, Any], handlers: dict[str, ToolHandler]) -
             "result": {
                 "protocolVersion": client_version if client_version == PROTOCOL_VERSION else PROTOCOL_VERSION,
                 "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "agent-workbench", "version": "0.4.0"},
+                "serverInfo": {"name": "agent-workbench", "version": "0.5.0"},
                 "instructions": (
                     "Agent Workbench: local setup diagnostics, an FTS code index over ~/repo, and a persistent brain. "
                     "Start a task with brief_task (merges code hits, docs, brain notes, and pinned references). "

@@ -54,7 +54,17 @@ def repo_state(repo: str, config: WorkbenchConfig | None = None) -> dict[str, An
     if dirty:
         warnings.append(f"{dirty} uncommitted change(s) in the working tree")
 
-    fetch_head = path / ".git" / "FETCH_HEAD"
+    common_dir = git_common_dir(path)
+    if is_linked_worktree(path):
+        # Surface this: an agent in a worktree is on a different branch from the
+        # main checkout, and anything indexed elsewhere describes that other tree.
+        result["worktree"] = True
+        result["main_worktree"] = str(main_worktree(path))
+        warnings.append(
+            f"this is a linked worktree of {main_worktree(path)} — the code index and other repo "
+            "tooling may be describing the main checkout's branch, not this one"
+        )
+    fetch_head = Path(common_dir) / "FETCH_HEAD" if common_dir else path / ".git" / "FETCH_HEAD"
     if fetch_head.exists():
         age_hours = (time.time() - fetch_head.stat().st_mtime) / 3600
         result["last_fetch_hours_ago"] = round(age_hours, 1)
@@ -89,3 +99,38 @@ def _git(path: Path, *args: str) -> str:
     except (OSError, subprocess.TimeoutExpired):
         return ""
     return proc.stdout.strip() if proc.returncode == 0 else ""
+
+def git_common_dir(path: Path) -> str:
+    """Absolute path of the repo's shared .git directory, or "" if not a repo.
+
+    This is the identity of a repository. A linked worktree has its own working
+    directory and its own `.git` *file*, but shares this common dir with the
+    main checkout — so two paths with the same common dir are two views of one
+    repo, not two repos. Anything that counts, names, or dedupes repos must key
+    on this, or a worktree gets counted twice.
+    """
+    out = _git(path, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    if out:
+        return out
+    # Older git lacks --path-format; resolve the relative answer ourselves.
+    rel = _git(path, "rev-parse", "--git-common-dir")
+    if not rel:
+        return ""
+    common = Path(rel)
+    return str(common if common.is_absolute() else (path / common).resolve())
+
+
+def is_linked_worktree(path: Path) -> bool:
+    """True when `path` is a linked worktree rather than the main checkout."""
+    common = git_common_dir(path)
+    if not common:
+        return False
+    return Path(common).parent.resolve() != path.resolve()
+
+
+def main_worktree(path: Path) -> Path:
+    """The main checkout for `path` (itself when `path` is already the main one)."""
+    common = git_common_dir(path)
+    if not common:
+        return path
+    return Path(common).parent

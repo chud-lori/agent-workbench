@@ -144,9 +144,46 @@ mkdir -p ~/.claude/skills
 for s in postmortem why meeting-prep; do ln -s "$WORKBENCH/harness/skills/$s" ~/.claude/skills/$s; done
 ```
 
+**11. Install the brain-primed agent types (Claude Code):** a subagent receives **no** hooks — not SessionStart priming, not prompt-recall injection — and none of the parent's context. Measured over 211 local subagent transcripts: 208 could reach the brain, 5 called `brain_recall`, and 0 ever got a note injected. So recall has to live in the subagent's own system prompt or it never happens. `harness/agents/` ships three types that recall before they act:
+
+- `scout` — read-only investigator: `brain_recall`/`brief_task` first, filesystem second; reports `path:line` and `brain#id`, and flags notes the code contradicts.
+- `implementer` — writes to the project's recorded conventions (decisions, gotchas, preferences), matches surrounding style, and proves the change with the project's own checks.
+- `adversary` — loads the project's known failure modes (`kind=gotcha`) before reading a diff, then reports only findings with a concrete failure scenario.
+
+setup.sh symlinks every `harness/agents/*.md` into `~/.claude/agents/`; manually:
+
+```bash
+mkdir -p ~/.claude/agents
+for a in "$WORKBENCH"/harness/agents/*.md; do ln -s "$a" ~/.claude/agents/"$(basename "$a")"; done
+```
+
+The parent's half of the job is a standing instruction: hand a subagent *evidence* (file:line, the snippet, `brain#id`), not conclusions it must re-derive.
+
+**12. Transcript retention (Claude Code):** setup.sh sets `cleanupPeriodDays: 3650` in `~/.claude/settings.json` when unset. Claude Code otherwise prunes `~/.claude/projects` after **30 days**, silently deleting session history on a rolling basis. An existing value is left alone.
+
 ## Measuring the brain (blind replay)
 
 To prove (or debug) the memory's value, replay a task the team already finished: check out the repo pinned to just before the real fix (single branch, no remote), give the same prompt to the same model twice — once with the workbench MCP/hooks disabled, once enabled — and score both against the shipped fix and your conventions (correctness, rules followed, tool calls, tokens, wall time). Run it blind (no session memory of the original work). This also audits the brain itself: a replay that contradicts a stored note means the note needs `brain_amend`.
+
+## Worktrees
+
+A linked worktree shares its history and its `.git` common dir with the main
+checkout — it is a second *view* of one repo, not a second repo. Everything that
+counts, names, or indexes repositories keys on `git rev-parse --git-common-dir`
+(`repo_state.git_common_dir`) so that:
+
+- `recent_activity` counts each commit once, reports the main checkout as the
+  repo, and lists the folded worktrees and their branches under `worktrees` —
+  scanning both trees used to double every commit.
+- the code index keeps **one checkout per repository**, so a search cannot
+  return whichever branch happened to be indexed last. An orphaned worktree
+  (main checkout gone) is still indexed, since it is then the only view.
+- `repo_state` flags `worktree: true` with `main_worktree`, and warns that other
+  repo tooling may be describing the main checkout's branch rather than this
+  one. It also reads `FETCH_HEAD` from the common dir — a worktree's `.git` is a
+  file, so the old `.git/FETCH_HEAD` path silently never existed.
+
+Regression tests live in `tests/test_worktree.py` and build a real worktree.
 
 ## Project conventions (when editing this repo)
 

@@ -74,7 +74,7 @@ def rebuild_index(config: WorkbenchConfig | None = None, roots: list[str] | None
         conn.execute("delete from repos")
         scanned = 0
         included = 0
-        for repo in _repo_roots(root_paths):
+        for repo in _dedupe_worktrees(_repo_roots(root_paths)):
             repo_info = _repo_info(repo)
             conn.execute(
                 "insert into repos(path,name,language,package_files,updated_at) values(?,?,?,?,?)",
@@ -113,7 +113,7 @@ def rebuild_index(config: WorkbenchConfig | None = None, roots: list[str] | None
                 )
                 included += 1
         conn.commit()
-        return {"index_path": str(config.index_path), "repos": len(_repo_roots(root_paths)), "files_scanned": scanned, "files_indexed": included}
+        return {"index_path": str(config.index_path), "repos": len(_dedupe_worktrees(_repo_roots(root_paths))), "files_scanned": scanned, "files_indexed": included}
     finally:
         conn.close()
 
@@ -122,7 +122,7 @@ def refresh_index(config: WorkbenchConfig | None = None, roots: list[str] | None
     config = config or default_config()
     root_paths = _resolve_roots(config, roots)
     config.workbench_home.mkdir(parents=True, exist_ok=True)
-    repos = _repo_roots(root_paths)
+    repos = _dedupe_worktrees(_repo_roots(root_paths))
     conn = sqlite3.connect(config.index_path)
     conn.row_factory = sqlite3.Row
     try:
@@ -354,6 +354,32 @@ def _repo_roots(roots: Iterable[Path]) -> list[Path]:
             if any((child / marker).exists() for marker in [".git", "README.md", "pyproject.toml", "package.json", "go.mod"]):
                 repos.append(child)
     return sorted(set(repos))
+
+
+def _dedupe_worktrees(repos: Iterable[Path]) -> list[Path]:
+    """Collapse linked worktrees onto their main checkout.
+
+    Indexing both stores the same paths twice under different roots and lets a
+    search return whichever branch happened to be indexed last — a wrong answer
+    rather than a missing one. One checkout per repository is the only version
+    the index can honestly claim to describe.
+    """
+    from .repo_state import git_common_dir, is_linked_worktree, main_worktree
+
+    canonical: dict[str, Path] = {}
+    for repo in repos:
+        key = git_common_dir(repo)
+        if not key:
+            canonical[str(repo.resolve())] = repo
+            continue
+        if is_linked_worktree(repo):
+            main = main_worktree(repo)
+            # Only fold into the main checkout when it actually exists on disk;
+            # otherwise the worktree is the sole view we have, so index it.
+            canonical.setdefault(key, main if main.is_dir() else repo)
+            continue
+        canonical[key] = repo
+    return sorted(set(canonical.values()))
 
 
 def _indexable_files(repo: Path, config: WorkbenchConfig) -> Iterable[Path]:
