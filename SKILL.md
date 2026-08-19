@@ -1,6 +1,6 @@
 ---
 name: agent-workbench
-description: Use the agent-workbench MCP for task-start context briefs, persistent cross-tool memory (brain_remember/brain_recall), local code search over ~/repo, and AI-setup diagnostics. Trigger at the start of any nontrivial ticket/feature task, when a durable fact/decision/gotcha is learned, or when local MCP/agent setup misbehaves.
+description: Use the agent-workbench MCP for task-start context briefs, persistent cross-tool memory (brain_remember/brain_recall/brain_amend), local code search, git activity across every local repo, deployed-vs-local checks, and AI-setup diagnostics. Trigger at the start of any nontrivial ticket/feature task, when a durable fact/decision/gotcha is learned, before claiming how production behaves, or when local MCP/agent setup misbehaves.
 ---
 
 # Agent Workbench Skill
@@ -13,9 +13,16 @@ Local MCP server (`agent-workbench` in Claude, `agent_workbench` in Codex) provi
 2. **During work** — when you learn something durable (schema quirk, deploy step, API behavior, decision), persist it:
    `brain_remember(content, kind=decision|fact|gotcha|preference|todo|note, project=<repo-dir-name>, tags=[...])`.
    Every note must include a source reference: ticket key, Slack channel + date, doc name, file path, or a GitHub permalink pinned to a commit SHA (`repo@sha path:line`). Never store secrets or facts trivially derivable from code.
-3. **Recall** — before re-deriving past decisions or conventions: `brain_recall(query)` or filter by `project`/`kind`. Mark finished todos with `brain_resolve(id)` (hidden from default recall; `include_resolved` shows them). Back up all notes with `brain_export`.
-4. **Index hygiene** — on a stale-index warning, run `refresh_code_index`. Check freshness with `index_status`.
-5. **Troubleshooting** — `doctor_report` (setup/secrets/permissions), `mcp_health` (MCP configs), `work_sources_status` (Slack/Google/Atlassian connector health).
+3. **Recall** — before re-deriving past decisions or conventions: `brain_recall(query)`, or filter by `project`/`kind`. `thread=<key>` gives a chronological digest of one storyline; `since=`/`until=` bound by when a note was stored. Mark finished todos with `brain_resolve(id)` (hidden from default recall; `include_resolved` shows them). Back up all notes with `brain_export`.
+4. **Correct, don't contradict** — when new knowledge corrects an earlier note, `brain_amend(id, ...)` (dated addendum or replace) or re-store with `supersedes=[ids]`. Never stack contradicting notes. `brain_promote` moves a proven personal note into a team playbook.
+5. **Activity, not memory** — the brain holds durable facts, *not* an activity log. "What did I do yesterday?" is `recent_activity` (commits across every local repo, all branches, so unpushed work still shows; linked worktrees fold into their main checkout so nothing is double-counted) merged with Slack, calendar, and PRs — that is what the `/standup` skill does.
+6. **Before prod claims** — run `repo_state` on the repo. Local checkouts often sit on feature branches with undeployed changes, and it will tell you when you are standing in a linked worktree whose branch differs from the indexed checkout.
+7. **Index hygiene** — on a stale-index warning, run `refresh_code_index`. Check freshness with `index_status`.
+8. **Troubleshooting** — `doctor_report` (setup/secrets/permissions), `mcp_health` (MCP configs), `work_sources_status` (connector health).
+
+## Delegating to subagents
+
+A subagent gets **no** hooks — no brain priming, no prompt-recall injection — and inherits none of your context, so it re-derives what you already know unless you hand it over. Paste established findings as evidence (`file:line`, the actual snippet, `brain#id`), say what is settled and off-limits, and prefer the brain-primed agent types (`scout`, `implementer`, `adversary`) which recall before they act.
 
 ## CLI equivalents
 
@@ -25,6 +32,7 @@ Run from the agent-workbench repo root (or use its absolute path):
 python3 run_cli.py brief "TICKET-1234"
 python3 run_cli.py remember "..." --kind fact --project my-api
 python3 run_cli.py recall "pause resume"
+python3 run_cli.py activity --since yesterday
 python3 run_cli.py refresh-index
 ```
 

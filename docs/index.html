@@ -164,6 +164,30 @@
   </div>
 </section>
 
+<section>
+  <div class="wrap">
+    <h2>Skills and agent types</h2>
+    <p class="lede">The hooks capture knowledge from interactive work. Skills answer the questions a brain full of durable facts cannot, and brain-primed agent types carry recall into subagents — which receive no hooks at all.</p>
+    <div class="tools">
+      <table>
+        <tr><th>Skill</th><th>What it does</th></tr>
+        <tr><td><code>/standup</code></td><td>"What did I do yesterday?" — merges git, PRs, Slack, and calendar into a paste-ready Done / Today / Blockers. The brain stores durable facts, not an activity log.</td></tr>
+        <tr><td><code>/brain-harvest</code></td><td>Weekly backfill: scans merged PRs, resolved tickets, and Slack for durable knowledge the hooks missed. Approval-gated.</td></tr>
+        <tr><td><code>/postmortem</code></td><td>Incident reconstruction from evidence: timeline, blameless five-whys, action items with owners.</td></tr>
+        <tr><td><code>/why</code></td><td>Code archaeology: blame → commit → PR → ticket → Slack → brain, with a cited chain and an honest dead-end when no reason survives.</td></tr>
+        <tr><td><code>/meeting-prep</code></td><td>One-page brief for the next calendar event: what changed since last time, what you owe and are owed.</td></tr>
+      </table>
+      <table style="margin-top: 18px;">
+        <tr><th>Agent type</th><th>What it does</th></tr>
+        <tr><td><code>scout</code></td><td>Read-only investigator: recalls notes before searching the filesystem, cites <code>path:line</code> and <code>brain#id</code>, and reports notes the code contradicts.</td></tr>
+        <tr><td><code>implementer</code></td><td>Implements against recorded decisions, gotchas, and preferences; matches surrounding style; proves the change with the project's own checks.</td></tr>
+        <tr><td><code>adversary</code></td><td>Loads the project's known failure modes before reading a diff, then reports only findings with a concrete failure scenario.</td></tr>
+      </table>
+    </div>
+    <p style="color: var(--muted); margin-top: 14px;">A subagent gets no SessionStart priming and no prompt-recall injection, and inherits none of the parent's context — so recall has to live in its own system prompt or it never happens.</p>
+  </div>
+</section>
+
 <section id="quickstart">
   <div class="wrap">
     <h2>Quickstart</h2>
@@ -185,7 +209,8 @@ cd agent-workbench
         <tr><td><code>brain_remember</code> / <code>brain_recall</code></td><td>Store and search durable notes (decision / fact / gotcha / preference / todo / reference). <code>supersedes</code> retires corrected notes; <code>thread=</code> gives a chronological storyline digest.</td></tr>
         <tr><td><code>brain_amend</code> / <code>brain_resolve</code> / <code>brain_promote</code></td><td>Correct a note in place, mark a todo done (kept, hidden), or promote a proven personal note into a team playbook.</td></tr>
         <tr><td><code>code_search</code></td><td>bm25 keyword search across every indexed repo at once.</td></tr>
-        <tr><td><code>repo_state</code></td><td>Branch, ahead/behind origin, dirty state — run before claiming how production behaves.</td></tr>
+        <tr><td><code>recent_activity</code></td><td>Commits you made in a time window across every local repo, all branches — so unpushed work <code>gh</code> cannot see still shows up. Linked worktrees fold into their main checkout, so nothing is counted twice.</td></tr>
+        <tr><td><code>repo_state</code></td><td>Branch, ahead/behind origin, dirty state, and whether you are standing in a linked worktree — run before claiming how production behaves.</td></tr>
         <tr><td><code>search_knowledge</code></td><td>Live search over agent docs: CLAUDE.md, AGENTS.md, SKILL.md, READMEs.</td></tr>
         <tr><td><code>doctor_report</code> / <code>mcp_health</code></td><td>Secrets on disk, broken MCP configs, over-broad permissions, stale docs.</td></tr>
       </table>

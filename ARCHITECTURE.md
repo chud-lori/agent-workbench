@@ -41,6 +41,8 @@ capabilities: a searchable code/product index, a persistent cross-tool memory
         |                      domain modules                           |
         |  brain.py        persistent notes (FTS5, porter)              |
         |  code_index.py   repo index build/refresh/search (FTS5)       |
+        |  activity.py     git evidence per window, all local repos     |
+        |  repo_state.py   branch/baseline/worktree identity (git)      |
         |  knowledge.py    live doc search, brief_task orchestrator     |
         |  scanners.py     doctor: secrets/MCP/permissions/stale docs   |
         |  work_sources.py sidecar connector health (no secrets)        |
@@ -96,6 +98,25 @@ Per-repo metadata (dominant language by suffix count, present package files) fee
 | Migration | `_connect` detects a pre-porter or pre-`resolved_at` schema and rebuilds the table **preserving rowids**, so note ids stay stable across upgrades |
 | Backup | `export` dumps everything (including resolved) to markdown, grouped by project |
 
+### Repository identity (`repo_state.py`)
+
+A linked git worktree is a second *view* of one repository, not a second
+repository: it has its own working directory and its own `.git` **file**, but
+shares the `.git` common dir with the main checkout. Every component that
+counts, names, or indexes repos therefore keys on
+`git rev-parse --git-common-dir` (`git_common_dir()`), not on the directory
+path:
+
+- `activity.py` groups by common dir and reports the main checkout once, listing
+  folded worktrees and their branches — scanning both trees double-counted every
+  commit.
+- `code_index.py` keeps one checkout per repository (`_dedupe_worktrees`), so a
+  search cannot return whichever branch was indexed last. An orphaned worktree
+  whose main checkout is gone is still indexed, being the only view left.
+- `repo_state.py` reports `worktree: true` with `main_worktree`, and reads
+  `FETCH_HEAD` from the common dir — the naive `<repo>/.git/FETCH_HEAD` path
+  never exists in a worktree, so staleness checks silently no-opped.
+
 ### Live doc search (`knowledge.py`, no index)
 
 `search_knowledge` scans agent/project docs (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`,
@@ -141,6 +162,22 @@ Two layers, with different guarantees:
   and kicks `refresh-index` as a detached background process. Resolves the workbench
   root from its own path, is best-effort at every step, and always exits 0 so it can
   never break session start.
+
+**Prompt-scoped (Claude Code only).**
+- `harness/skills/*/SKILL.md` — symlinked into `~/.claude/skills/`. Skills answer
+  what a store of durable facts cannot: `/standup` (activity, not memory),
+  `/brain-harvest`, `/postmortem`, `/why`, `/meeting-prep`. All share one shape:
+  gather from every source in parallel, verify before presenting, cite a surface
+  per line.
+- `harness/agents/*.md` — symlinked into `~/.claude/agents/`. A subagent receives
+  **no** hooks (a spawn is neither a session start nor a user prompt) and none of
+  the parent's context, so recall must live in its own system prompt: `scout`
+  recalls before searching, `implementer` recalls conventions before editing,
+  `adversary` recalls known failure modes before reviewing. There is no
+  subagent-spawn hook point, so this is the only lever available.
+
+`setup.sh` also raises Claude Code's `cleanupPeriodDays` to 3650 when unset —
+the 30-day default silently prunes `~/.claude/projects` transcripts.
 
 The MCP server itself is registered per harness: `claude mcp add` (name
 `agent-workbench`), `~/.codex/config.toml` (`agent_workbench`), or Gemini
