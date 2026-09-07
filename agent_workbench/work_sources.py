@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import json
-import tomllib
 from pathlib import Path
 from typing import Any
 
 from .config import WorkbenchConfig, default_config
-from .util import command_exists, read_text_limited, run_capture
+from .util import TOML_AVAILABLE, TOML_UNAVAILABLE_REASON, load_toml, command_exists, read_text_limited, run_capture
 
 
 def work_sources_status(config: WorkbenchConfig | None = None) -> dict[str, Any]:
@@ -72,7 +71,7 @@ def _atlassian_status(config: WorkbenchConfig) -> dict[str, Any]:
     url = None
     if codex_config.exists():
         try:
-            data = tomllib.loads(read_text_limited(codex_config, 512_000))
+            data = load_toml(read_text_limited(codex_config, 512_000))
             server = data.get("mcp_servers", {}).get("atlassian", {})
             configured = bool(server)
             url = server.get("url")
@@ -86,6 +85,10 @@ def _atlassian_status(config: WorkbenchConfig) -> dict[str, Any]:
         "registered_name": "atlassian",
     }
     warnings = []
+    if codex_config.exists() and not TOML_AVAILABLE:
+        # Not-configured and could-not-read must never look the same.
+        status["configured_in_codex"] = None
+        warnings.append(TOML_UNAVAILABLE_REASON)
     for label, value in (("codex", url), ("claude", claude_url)):
         if value and DEPRECATED_ATLASSIAN_ENDPOINT in value:
             warnings.append(
@@ -122,13 +125,15 @@ def _agent_workbench_status(config: WorkbenchConfig) -> dict[str, Any]:
     args = None
     if codex_config.exists():
         try:
-            data = tomllib.loads(read_text_limited(codex_config, 512_000))
+            data = load_toml(read_text_limited(codex_config, 512_000))
             server = data.get("mcp_servers", {}).get("agent_workbench", {})
             configured = bool(server)
             command = server.get("command")
             args = server.get("args")
         except Exception:
             pass
+    if codex_config.exists() and not TOML_AVAILABLE:
+        configured = None
     return {
         "configured_in_codex": configured,
         "command": command,

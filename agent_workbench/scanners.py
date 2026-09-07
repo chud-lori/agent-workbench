@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import re
-import tomllib
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
 from .config import WorkbenchConfig, default_config
-from .util import command_exists, dump_json, iter_files, load_json, read_text_limited
+from .util import TOML_AVAILABLE, TOML_UNAVAILABLE_REASON, load_toml, command_exists, dump_json, iter_files, load_json, read_text_limited
 
 
 @dataclass
@@ -58,9 +57,22 @@ def scan_all(config: WorkbenchConfig | None = None) -> list[Finding]:
 def scan_mcp_configs(config: WorkbenchConfig) -> list[Finding]:
     findings: list[Finding] = []
     codex_config = config.codex_home / "config.toml"
+    if codex_config.exists() and not TOML_AVAILABLE:
+        # Say so rather than reporting a clean scan we did not perform.
+        findings.append(
+            Finding(
+                "low",
+                "mcp",
+                str(codex_config),
+                None,
+                "Codex MCP config not checked",
+                TOML_UNAVAILABLE_REASON,
+                "upgrade to Python 3.11+ to include Codex MCP servers in this scan",
+            )
+        )
     if codex_config.exists():
         try:
-            data = tomllib.loads(read_text_limited(codex_config, 512_000))
+            data = load_toml(read_text_limited(codex_config, 512_000))
             servers = data.get("mcp_servers", {})
             for name, server in servers.items():
                 command = server.get("command")

@@ -9,6 +9,29 @@ from datetime import datetime, time as day_time, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
+try:  # tomllib landed in 3.11; this project supports 3.10.
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - depends on interpreter
+    tomllib = None  # type: ignore[assignment]
+
+TOML_AVAILABLE = tomllib is not None
+TOML_UNAVAILABLE_REASON = (
+    "reading Codex's config.toml needs a TOML parser (tomllib, Python 3.11+); "
+    "on 3.10 these checks are skipped rather than guessed"
+)
+
+
+def load_toml(text: str) -> dict[str, Any]:
+    """Parse TOML text, raising when the interpreter has no parser.
+
+    Callers already treat a parse failure as "cannot inspect this file"; the
+    important part is that they must not silently report *absence* when the
+    truth is that nothing could be read.
+    """
+    if tomllib is None:
+        raise RuntimeError(TOML_UNAVAILABLE_REASON)
+    return tomllib.loads(text)
+
 
 TEXT_EXTENSIONS = {
     ".md",

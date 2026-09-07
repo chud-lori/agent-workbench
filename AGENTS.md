@@ -131,17 +131,18 @@ mkdir -p ~/.claude/skills && ln -s "$WORKBENCH/harness/skills/standup" ~/.claude
 
 Degrades cleanly: any missing source is skipped and called out, since a silently absent source reads as "nothing happened there."
 
-**10. Install the evidence skills (Claude Code):** three more skills follow the same fan-out-and-verify pattern as `/standup` — gather from every source in parallel, verify threads before presenting, cite a surface for every line:
+**10. Install the evidence skills (Claude Code):** four more skills follow the same fan-out-and-verify pattern as `/standup` — gather from every source in parallel, verify threads before presenting, cite a surface for every line:
 
 - `/postmortem` — reconstruct an incident from Slack + `recent_activity` + deploys + PRs + tickets into a timeline (cause introduced → detected → mitigated → resolved), a blameless five-whys, and a draft with owned action items. Ends by *proposing* one root-cause `gotcha` for the brain — approval-gated.
 - `/why` — code archaeology: climb blame → commit → PR → ticket → Slack → brain to answer "why does this code exist", with a cited evidence chain and an honest "no recorded reason survives" when the chain dead-ends.
 - `/meeting-prep` — one-page brief for the next calendar event: agenda + what changed since last occurrence + what you owe / are owed + likely topics, from calendar, Slack, Jira, PRs, and brain notes.
+- `/pr-review` — opinionated review of a GitHub PR, branch, or working diff: loads the project's recorded gotchas/decisions first (a change that walks back into a recorded trap is the highest-value finding), then checks comment noise, overengineering, security, algorithmic efficiency, simplicity, and maintainability. Every finding needs a concrete fix; an "overengineered" call must name the simpler alternative and an "inefficient" one must name the scale where it hurts. Posting to GitHub is approval-gated and never `--approve`s. Complements Claude Code's built-in `/code-review` (correctness bugs) rather than duplicating it.
 
 setup.sh symlinks every directory under `harness/skills/`, so these install with the rest; manually:
 
 ```bash
 mkdir -p ~/.claude/skills
-for s in postmortem why meeting-prep; do ln -s "$WORKBENCH/harness/skills/$s" ~/.claude/skills/$s; done
+for s in postmortem why meeting-prep pr-review; do ln -s "$WORKBENCH/harness/skills/$s" ~/.claude/skills/$s; done
 ```
 
 **11. Install the brain-primed agent types (Claude Code):** a subagent receives **no** hooks — not SessionStart priming, not prompt-recall injection — and none of the parent's context. Measured over 211 local subagent transcripts: 208 could reach the brain, 5 called `brain_recall`, and 0 ever got a note injected. So recall has to live in the subagent's own system prompt or it never happens. `harness/agents/` ships three types that recall before they act:
@@ -187,7 +188,7 @@ Regression tests live in `tests/test_worktree.py` and build a real worktree.
 
 ## Project conventions (when editing this repo)
 
-- Python ≥3.10, stdlib only — do not add dependencies.
+- Python ≥3.10, stdlib only — do not add dependencies. `tomllib` is 3.11+, so it is imported through `util.load_toml()`, which raises a named reason on 3.10; callers must report that they could not read a file rather than reporting it as absent (`tests/test_portability.py` guards this).
 - State lives in `.state/` (`index.sqlite`, `brain.sqlite`); never commit it.
 - Index roots default to `~/repo`; override via `AGENT_WORKBENCH_INDEX_ROOTS` (colon/comma-separated) or explicit `roots` args. Doctor intentionally also scans `~/Projects`.
 - Smoke test after changes: pipe `initialize` + `tools/list` JSON-RPC lines into `run_mcp.py` and check the reply.
