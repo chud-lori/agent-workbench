@@ -105,6 +105,19 @@ live in their own system prompt. `harness/agents/` ships three types that do:
 
 setup.sh symlinks them into `~/.claude/agents/`.
 
+## Commit attribution guard
+
+Two plain git hooks in `harness/git-hooks/` keep commits attributed to the human
+who owns the repo — for any assistant, not one vendor:
+
+- `commit-msg` strips `Co-Authored-By:`/`Generated with …`/robot-emoji attribution lines and says what it removed
+- `pre-commit` refuses a commit authored or committed under an assistant/bot identity, or with no email set
+
+Enable for one repo via `.git/hooks`, or for every repo with
+`git config --global core.hooksPath <clone>/harness/git-hooks`; setup.sh offers
+both. They chain to repo-local hooks, keep human co-authors, and leave prose
+that merely mentions these tools alone.
+
 ## CLI
 
 Every tool has a CLI equivalent for shells, cron jobs, and hooks:

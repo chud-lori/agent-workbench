@@ -205,6 +205,42 @@ if [ "$DO_CLAUDE" = "y" ] && [ ! -f "$WORKBENCH/.state/guard-patterns.txt" ]; th
   fi
 fi
 
+# --- Commit attribution guard (git hooks) ---------------------------------------
+# Keeps AI attribution out of commit messages and refuses commits made under an
+# assistant/bot identity. Harness-independent: plain git hooks, so it applies to
+# every agent (and every human) that commits in the repo, not just one vendor.
+step "Commit attribution guard"
+HOOKS_SRC="$WORKBENCH/harness/git-hooks"
+info "hooks: $HOOKS_SRC (commit-msg strips AI trailers, pre-commit blocks bot identities)"
+if ask "Install the commit guard for THIS repo (.git/hooks)?" "y"; then
+  for hook in commit-msg pre-commit; do
+    target="$WORKBENCH/.git/hooks/$hook"
+    if [ -L "$target" ] && [ "$(readlink "$target")" = "$HOOKS_SRC/$hook" ]; then
+      info "$hook already linked."
+    elif [ -e "$target" ]; then
+      info "$hook: $target exists and is not our symlink - left as is."
+    else
+      mkdir -p "$WORKBENCH/.git/hooks"
+      ln -s "$HOOKS_SRC/$hook" "$target"
+      info "linked $hook into this repo."
+    fi
+  done
+fi
+# Machine-wide is the stronger option: core.hooksPath makes the guard apply to
+# EVERY repo. Our hooks chain to a repo-local hook of the same name afterwards,
+# so projects with their own hooks keep working.
+CURRENT_HOOKS_PATH="$(git config --global core.hooksPath || true)"
+if [ -z "$CURRENT_HOOKS_PATH" ]; then
+  if ask "Also apply the guard to EVERY repo on this machine (git core.hooksPath)?" "n"; then
+    git config --global core.hooksPath "$HOOKS_SRC"
+    info "set global core.hooksPath=$HOOKS_SRC (repo-local hooks still run, chained)."
+  fi
+elif [ "$CURRENT_HOOKS_PATH" = "$HOOKS_SRC" ]; then
+  info "global core.hooksPath already points here."
+else
+  info "global core.hooksPath is set to $CURRENT_HOOKS_PATH - left as is."
+fi
+
 # --- Companion plugins (optional, third-party, installed from upstream) ---------
 # Not vendored: these are maintained elsewhere and install with their own
 # installers. setup.sh just offers them so a new machine is one command.

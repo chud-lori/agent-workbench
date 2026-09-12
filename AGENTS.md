@@ -162,6 +162,24 @@ The parent's half of the job is a standing instruction: hand a subagent *evidenc
 
 **12. Transcript retention (Claude Code):** setup.sh sets `cleanupPeriodDays: 3650` in `~/.claude/settings.json` when unset. Claude Code otherwise prunes `~/.claude/projects` after **30 days**, silently deleting session history on a rolling basis. An existing value is left alone.
 
+**13. Install the commit attribution guard (any agent, any harness):** two plain git hooks in `harness/git-hooks/`, so the rule holds for *every* assistant that commits — and for humans — rather than depending on one vendor's instructions:
+
+- `commit-msg` **strips** AI-attribution lines (`Co-Authored-By:` / `Assisted-by:` naming an assistant, `Generated with …`, robot-emoji lines) and reports what it removed. It strips rather than rejects because the outcome that matters is a clean message, and stripping reaches it in one pass even when an agent's own harness keeps re-adding the trailer.
+- `pre-commit` **refuses** a commit whose author or committer is an assistant/bot identity, or whose email is unset. Identity is fixed before the message exists and a hook cannot rewrite it, so this one must reject.
+
+Both chain to a repo-local hook of the same name afterwards, so enabling them machine-wide never silently disables a project's own hooks.
+
+```bash
+# this repo only
+ln -s "$WORKBENCH/harness/git-hooks/commit-msg" .git/hooks/commit-msg
+ln -s "$WORKBENCH/harness/git-hooks/pre-commit" .git/hooks/pre-commit
+
+# or every repo on the machine
+git config --global core.hooksPath "$WORKBENCH/harness/git-hooks"
+```
+
+Why it exists: an AI trailer that reaches GitHub attaches a bot account to the repository's contributor graph, and that cache persists long after the trailer is scrubbed. `git commit --no-verify` still bypasses the hooks by design — this is a guardrail against automation, not a lock against the repo owner. Human co-authors and prose that merely mentions these tools are deliberately left alone (`tests/test_commit_guard.py`).
+
 ## Measuring the brain (blind replay)
 
 To prove (or debug) the memory's value, replay a task the team already finished: check out the repo pinned to just before the real fix (single branch, no remote), give the same prompt to the same model twice — once with the workbench MCP/hooks disabled, once enabled — and score both against the shipped fix and your conventions (correctness, rules followed, tool calls, tokens, wall time). Run it blind (no session memory of the original work). This also audits the brain itself: a replay that contradicts a stored note means the note needs `brain_amend`.
@@ -190,5 +208,6 @@ Regression tests live in `tests/test_worktree.py` and build a real worktree.
 
 - Python ≥3.10, stdlib only — do not add dependencies. `tomllib` is 3.11+, so it is imported through `util.load_toml()`, which raises a named reason on 3.10; callers must report that they could not read a file rather than reporting it as absent (`tests/test_portability.py` guards this).
 - State lives in `.state/` (`index.sqlite`, `brain.sqlite`); never commit it.
+- Shell hooks in `harness/git-hooks/` are POSIX `sh`, not bash, and are matched with `grep -E` — write alternations as `a|b`, never `a\|b` (inside `-E` that is a literal pipe, which once silently disabled the whole vendor list).
 - Index roots default to `~/repo`; override via `AGENT_WORKBENCH_INDEX_ROOTS` (colon/comma-separated) or explicit `roots` args. Doctor intentionally also scans `~/Projects`.
 - Smoke test after changes: pipe `initialize` + `tools/list` JSON-RPC lines into `run_mcp.py` and check the reply.

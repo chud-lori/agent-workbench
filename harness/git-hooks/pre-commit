@@ -1,0 +1,45 @@
+#!/bin/sh
+# Refuse a commit whose author or committer is an assistant / bot identity.
+#
+# The message hook cannot fix this: identity is fixed before the message is
+# written, and a hook cannot rewrite it. So this one rejects, loudly, with the
+# command to correct it. Agent-agnostic — matches assistant and bot identities
+# generally rather than one vendor's.
+set -u
+
+AI='claude|anthropic|copilot|cursor|codex|openai|chatgpt|gpt-[0-9]|gemini|bard|devin|aider|windsurf|cline|continue\.dev|sourcegraph|tabnine|codewhisperer|replit|jules|amp-code|assistant|\[bot\]|bot@|noreply@'
+
+fail=0
+for role in AUTHOR COMMITTER; do
+  eval "name=\${GIT_${role}_NAME:-}"
+  eval "mail=\${GIT_${role}_EMAIL:-}"
+  # Fall back to configured identity when git has not exported the env vars.
+  if [ -z "$name" ]; then name=$(git config user.name || true); fi
+  if [ -z "$mail" ]; then mail=$(git config user.email || true); fi
+
+  if printf '%s %s' "$name" "$mail" | grep -qiE "($AI)"; then
+    echo "agent-workbench: refusing to commit as an assistant identity." >&2
+    echo "  $role: ${name:-<unset>} <${mail:-<unset>}>" >&2
+    fail=1
+  fi
+  if [ -z "$mail" ]; then
+    echo "agent-workbench: no git $role email configured — commits would be unattributable." >&2
+    fail=1
+  fi
+done
+
+if [ "$fail" -ne 0 ]; then
+  echo "" >&2
+  echo "  Commits must be attributed to the repository owner's own account. Set it with:" >&2
+  echo "    git config user.name  \"Your Name\"" >&2
+  echo "    git config user.email \"you@example.com\"" >&2
+  exit 1
+fi
+
+# Chain to a repo-local pre-commit when running as core.hooksPath.
+LOCAL="$(git rev-parse --git-path hooks/pre-commit 2>/dev/null)"
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+if [ -n "$LOCAL" ] && [ -x "$LOCAL" ] && [ "$(cd "$(dirname "$LOCAL")" && pwd)/$(basename "$LOCAL")" != "$SELF" ]; then
+  exec "$LOCAL" "$@"
+fi
+exit 0
