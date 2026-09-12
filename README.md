@@ -113,10 +113,12 @@ who owns the repo — for any assistant, not one vendor:
 - `commit-msg` strips `Co-Authored-By:`/`Generated with …`/robot-emoji attribution lines and says what it removed
 - `pre-commit` refuses a commit authored or committed under an assistant/bot identity, or with no email set
 
-Enable for one repo via `.git/hooks`, or for every repo with
-`git config --global core.hooksPath <clone>/harness/git-hooks`; setup.sh offers
-both. They chain to repo-local hooks, keep human co-authors, and leave prose
-that merely mentions these tools alone.
+setup.sh copies them to `~/.config/agent-workbench/git-hooks/` and can point
+`core.hooksPath` there, so the guard applies to every repo and survives any
+branch checkout — a hook symlinked into the tree it guards disappears the moment
+you check out an older branch, and fails silently. They chain to repo-local
+hooks, keep human co-authors, and leave prose that merely mentions these tools
+alone.
 
 ## CLI
 

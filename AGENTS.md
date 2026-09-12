@@ -169,13 +169,17 @@ The parent's half of the job is a standing instruction: hand a subagent *evidenc
 
 Both chain to a repo-local hook of the same name afterwards, so enabling them machine-wide never silently disables a project's own hooks.
 
-```bash
-# this repo only
-ln -s "$WORKBENCH/harness/git-hooks/commit-msg" .git/hooks/commit-msg
-ln -s "$WORKBENCH/harness/git-hooks/pre-commit" .git/hooks/pre-commit
+setup.sh **copies** them to `~/.config/agent-workbench/git-hooks/` and points git at that. Never symlink a hook into the working tree it guards: checking out a branch that predates the hook makes the symlink dangle, and a dangling hook fails *silently* — the worst way for a guardrail to fail. Because they are copies, re-run setup.sh after editing a hook.
 
-# or every repo on the machine
-git config --global core.hooksPath "$WORKBENCH/harness/git-hooks"
+```bash
+HOOKS_DIR=~/.config/agent-workbench/git-hooks
+mkdir -p "$HOOKS_DIR"
+cp "$WORKBENCH"/harness/git-hooks/{commit-msg,pre-commit} "$HOOKS_DIR"/
+chmod +x "$HOOKS_DIR"/*
+
+git config --global core.hooksPath "$HOOKS_DIR"   # every repo on the machine
+# or, one repo only:
+cp "$HOOKS_DIR"/* <repo>/.git/hooks/
 ```
 
 Why it exists: an AI trailer that reaches GitHub attaches a bot account to the repository's contributor graph, and that cache persists long after the trailer is scrubbed. `git commit --no-verify` still bypasses the hooks by design — this is a guardrail against automation, not a lock against the repo owner. Human co-authors and prose that merely mentions these tools are deliberately left alone (`tests/test_commit_guard.py`).
