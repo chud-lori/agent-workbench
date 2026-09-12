@@ -91,7 +91,7 @@ Six skills under `harness/skills/` share one pattern: gather from every work sou
 - `/brain-harvest` — weekly backfill: scan merged PRs, resolved tickets, and Slack for durable knowledge the hooks missed; approval-gated
 - `/postmortem` — incident reconstruction: evidence timeline, blameless five-whys, action items with owners; proposes one root-cause gotcha for the brain
 - `/why` — code archaeology: blame → commit → PR → ticket → Slack → brain, answering "why does this code exist" with a cited chain
-- `/pr-review` — reviews a PR/branch/diff against the project's recorded conventions plus six axes: comment noise, overengineering, security, efficiency, simplicity, maintainability
+- `/pr-review` — reviews a PR/branch/diff against the project's recorded conventions plus six axes (comment noise, overengineering, security, efficiency, simplicity, maintainability), citing numbered rules and closing with a Gate/Justify/Lock verdict
 - `/meeting-prep` — one-page brief for the next calendar event: what changed since last time, what you owe / are owed, likely topics
 
 ## Agent types (Claude Code)
