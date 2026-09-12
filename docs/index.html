@@ -3,245 +3,766 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agent Workbench — persistent memory &amp; context for AI coding agents</title>
-<meta name="description" content="A local, dependency-free memory and context layer for AI coding agents: persistent cross-tool brain, FTS code index, and setup diagnostics over MCP.">
+<title>Agent Workbench: local memory and context for AI coding agents</title>
+<meta name="description" content="Reference for Agent Workbench: a local, dependency-free MCP server and CLI with a persistent cross-tool brain, an FTS code index, and AI-setup diagnostics. Tool reference, install, hooks, and configuration.">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <style>
-  :root {
-    --bg: #0b0b14;
-    --bg-soft: #14141f;
-    --card: #181826;
-    --border: #2a2a3d;
-    --text: #e7e7f0;
-    --muted: #9d9db3;
-    --accent: #8b7bf7;
-    --accent-2: #b07df0;
-    --code-bg: #101018;
-    --amber: #f5b942;
+/*
+  Design decisions and their reasons (DESIGN.md holds the sourced version).
+  Palette: violet family + neutral ramp, taken from logo.svg, which predates
+    this page. Amber (#f5b942 dark, #9a5b06 light) is the logo's core node and
+    is the single accent. It marks counted facts only: the tool total and the
+    live filter count. Both are real numbers computed from this page.
+  No gradient background, no glow: the old hero glow was decoration with no
+    hierarchy job. Purple now only colors links, focus, and the primary button.
+  Type: system sans and ui-monospace, both already in this repo. A webfont
+    would mean a network fetch, which is the one thing this product refuses.
+    Mono marks literal strings the reader will type, never used for display.
+  Radius: 4px on inline code, 8px on controls, 12px on panels. Three steps so
+    radius reads as hierarchy rather than a single pill default.
+  Shadow: none. Panels are separated by a border and by whitespace, so no
+    element needs to lift off the page.
+  Motion: MOTION dial 1. Colour and border transitions on hover and focus only,
+    120ms. Nothing loops, nothing reveals on scroll, nothing moves unprompted.
+  Rhythm: RHYTHM dial 2. Surfaces are a prose split, install is a numbered
+    sequence, tools are a filtered list, hooks are an ordered sequence, config
+    is a table. Each shape follows what the content is.
+*/
+:root {
+  color-scheme: dark;
+  --bg: #0b0b14;
+  --bg-soft: #14141f;
+  --card: #181826;
+  --border: #2a2a3d;
+  --border-strong: #3c3c54;
+  --text: #e7e7f0;
+  --muted: #9d9db3;
+  --accent: #8b7bf7;
+  --accent-ink: #ffffff;
+  --accent-solid: #5b48d9;
+  --code-bg: #101018;
+  --mark: #f5b942;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #fafaff;
+    --bg-soft: #f1f1f8;
+    --card: #ffffff;
+    --border: #e3e3ef;
+    --border-strong: #c6c6da;
+    --text: #1c1c2e;
+    --muted: #5d5d75;
+    --accent: #5b48d9;
+    --accent-ink: #ffffff;
+    --accent-solid: #5b48d9;
+    --code-bg: #f4f4fa;
+    --mark: #9a5b06;
   }
-  @media (prefers-color-scheme: light) {
-    :root {
-      --bg: #fafaff;
-      --bg-soft: #f1f1f8;
-      --card: #ffffff;
-      --border: #e3e3ef;
-      --text: #1c1c2e;
-      --muted: #5d5d75;
-      --accent: #5b48d9;
-      --accent-2: #8b3fd4;
-      --code-bg: #f4f4fa;
-    }
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    line-height: 1.6;
-    -webkit-font-smoothing: antialiased;
-  }
-  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #fafaff;
+  --bg-soft: #f1f1f8;
+  --card: #ffffff;
+  --border: #e3e3ef;
+  --border-strong: #c6c6da;
+  --text: #1c1c2e;
+  --muted: #5d5d75;
+  --accent: #5b48d9;
+  --accent-ink: #ffffff;
+  --accent-solid: #5b48d9;
+  --code-bg: #f4f4fa;
+  --mark: #9a5b06;
+}
 
-  /* hero */
-  header {
-    padding: 72px 0 56px;
-    text-align: center;
-    background:
-      radial-gradient(600px 300px at 50% -50px, rgba(109, 40, 217, 0.25), transparent 70%);
-  }
-  header img.logo { width: 120px; height: 120px; border-radius: 26px; box-shadow: 0 12px 40px rgba(109, 40, 217, 0.35); }
-  header h1 { font-size: 2.6rem; margin-top: 24px; letter-spacing: -0.02em; }
-  header p.tag { font-size: 1.2rem; color: var(--muted); max-width: 620px; margin: 12px auto 0; }
-  .btns { margin-top: 28px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-  .btn {
-    display: inline-block; padding: 10px 22px; border-radius: 10px; font-weight: 600;
-    border: 1px solid var(--border); color: var(--text); transition: transform .1s ease;
-  }
-  .btn:hover { text-decoration: none; transform: translateY(-1px); }
-  .btn.primary {
-    background: linear-gradient(120deg, #4f46e5, #9333ea); color: #fff; border: none;
-  }
-  .harnesses { margin-top: 28px; color: var(--muted); font-size: .92rem; }
-  .harnesses span { margin: 0 10px; }
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
+}
+.wrap { max-width: 940px; margin: 0 auto; padding: 0 20px; }
+a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+.skip {
+  position: absolute; left: -9999px; top: 0;
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  padding: 12px 16px; z-index: 10;
+}
+.skip:focus { left: 12px; top: 12px; }
 
-  section { padding: 44px 0; }
-  section.alt { background: var(--bg-soft); }
-  h2 { font-size: 1.6rem; margin-bottom: 8px; letter-spacing: -0.01em; }
-  .lede { color: var(--muted); margin-bottom: 28px; max-width: 700px; }
+code, kbd { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+p code, li code, td code, dd code, .note code {
+  background: var(--code-bg); border: 1px solid var(--border);
+  padding: 1px 5px; border-radius: 4px; font-size: .88em;
+}
+pre {
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px 18px; overflow-x: auto; font-size: .92rem; line-height: 1.6;
+}
+pre code { font-size: inherit; }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-  .card {
-    background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px;
-  }
-  .card .emoji { font-size: 1.6rem; }
-  .card h3 { margin: 10px 0 6px; font-size: 1.08rem; }
-  .card p { color: var(--muted); font-size: .95rem; }
-  .card code { font-size: .85em; }
+/* masthead */
+.masthead { border-bottom: 1px solid var(--border); background: var(--bg-soft); }
+.masthead .wrap {
+  display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px;
+}
+.masthead img { width: 30px; height: 30px; border-radius: 7px; }
+.masthead .name { font-weight: 650; letter-spacing: -0.01em; }
+.masthead nav { display: flex; flex-wrap: wrap; gap: 2px; margin-left: auto; }
+.masthead nav a {
+  color: var(--muted); text-decoration: none;
+  padding: 11px 10px; min-height: 44px; display: inline-flex; align-items: center;
+  border-radius: 8px; font-size: .93rem;
+}
+.masthead nav a:hover { color: var(--text); background: var(--card); text-decoration: none; }
 
-  pre {
-    background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px;
-    padding: 18px 20px; overflow-x: auto; font-size: .9rem; line-height: 1.55;
-  }
-  code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
-  p > code, li > code, td > code {
-    background: var(--code-bg); border: 1px solid var(--border);
-    padding: 1px 6px; border-radius: 6px; font-size: .86em;
-  }
-  .comment { color: var(--muted); }
+/* theme control */
+.theme { display: flex; align-items: center; gap: 6px; }
+.theme .label { color: var(--muted); font-size: .82rem; }
+.theme .group { display: flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+.theme button {
+  font: inherit; font-size: .85rem; cursor: pointer;
+  background: transparent; color: var(--muted); border: 0;
+  padding: 0 12px; min-height: 44px; min-width: 48px;
+  transition: background .12s ease, color .12s ease;
+}
+.theme button + button { border-left: 1px solid var(--border-strong); }
+.theme button:hover { color: var(--text); background: var(--card); }
+.theme button[aria-pressed="true"] { background: var(--accent-solid); color: var(--accent-ink); }
 
-  .loop { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 20px; }
-  .loop .step { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
-  .loop .step b { display: block; color: var(--accent); font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; }
-  .loop .step span { font-size: .92rem; color: var(--muted); }
-  .loop .step .hook { display: block; margin-top: 6px; font-size: .78rem; color: var(--text); opacity: .75; }
+/* hero */
+.hero { padding: 52px 0 40px; border-bottom: 1px solid var(--border); }
+.hero img { width: 76px; height: 76px; border-radius: 18px; }
+.hero h1 { font-size: clamp(1.9rem, 5.5vw, 2.7rem); line-height: 1.15; letter-spacing: -0.02em; margin: 18px 0 0; }
+.hero .sub { font-size: 1.12rem; color: var(--muted); max-width: 62ch; margin-top: 14px; }
+.hero .facts { margin-top: 18px; font-size: .98rem; color: var(--muted); max-width: 62ch; }
+.hero .facts strong { color: var(--mark); font-variant-numeric: tabular-nums; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+.action {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; padding: 0 20px; border-radius: 8px;
+  font-weight: 600; text-decoration: none;
+  border: 1px solid var(--border-strong); color: var(--text);
+  transition: border-color .12s ease, background .12s ease;
+}
+.action:hover { text-decoration: none; border-color: var(--accent); background: var(--card); }
+.action.primary { background: var(--accent-solid); color: var(--accent-ink); border-color: var(--accent-solid); }
+.action.primary:hover { background: #4a39c4; border-color: #4a39c4; }
 
-  .tools { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; font-size: .93rem; }
-  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
-  td:first-child { white-space: nowrap; }
+section { padding: 46px 0; border-bottom: 1px solid var(--border); }
+section.soft { background: var(--bg-soft); }
+h2 { font-size: 1.5rem; letter-spacing: -0.01em; }
+h3 { font-size: 1.06rem; margin-bottom: 4px; }
+.lede { color: var(--muted); max-width: 68ch; margin-top: 8px; }
+.note { color: var(--muted); font-size: .93rem; max-width: 72ch; margin-top: 14px; }
 
-  ul.principles { list-style: none; }
-  ul.principles li { padding: 10px 0; border-bottom: 1px solid var(--border); color: var(--muted); }
-  ul.principles li:last-child { border-bottom: none; }
-  ul.principles b { color: var(--text); }
+/* surfaces: the brain gets the wide column because it is the reason the
+   project exists; the other two sit beside it as supporting detail. */
+.surfaces { display: grid; grid-template-columns: 1.35fr 1fr; gap: 18px; margin-top: 24px; align-items: start; }
+.panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.panel p { color: var(--muted); font-size: .95rem; margin-top: 6px; }
+.panel + .panel { margin-top: 18px; }
+@media (max-width: 760px) { .surfaces { grid-template-columns: 1fr; } }
 
-  footer { padding: 40px 0 56px; text-align: center; color: var(--muted); font-size: .9rem; }
-  footer a { margin: 0 10px; }
+/* install */
+.steps { counter-reset: step; list-style: none; margin-top: 22px; }
+.steps > li { position: relative; padding-left: 34px; padding-bottom: 20px; }
+.steps > li::before {
+  counter-increment: step; content: counter(step);
+  position: absolute; left: 0; top: 1px;
+  width: 24px; height: 24px; border-radius: 6px;
+  border: 1px solid var(--border-strong); color: var(--muted);
+  font-size: .8rem; display: grid; place-items: center;
+}
+.steps b { display: block; }
+.steps p { color: var(--muted); font-size: .95rem; margin-top: 4px; }
+.copyrow { display: flex; align-items: flex-start; gap: 10px; margin-top: 10px; }
+.copyrow pre { flex: 1; margin: 0; min-width: 0; }
+.copy {
+  font: inherit; font-size: .88rem; cursor: pointer; white-space: nowrap;
+  min-height: 44px; padding: 0 14px; border-radius: 8px;
+  background: transparent; color: var(--text);
+  border: 1px solid var(--border-strong);
+  transition: border-color .12s ease, color .12s ease;
+}
+.copy:hover { border-color: var(--accent); }
+.copy[data-state="done"] { border-color: var(--mark); color: var(--mark); }
+.copy[data-state="failed"] { border-color: var(--border-strong); color: var(--muted); }
+@media (max-width: 560px) { .copyrow { flex-direction: column; } .copy { width: 100%; } }
+
+/* tool reference */
+.filterbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 22px; }
+.filterbar label { font-size: .93rem; color: var(--muted); }
+#tool-filter {
+  font: inherit; min-height: 44px; padding: 0 12px; flex: 1 1 260px; min-width: 0;
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 8px;
+}
+#tool-filter::placeholder { color: var(--muted); }
+#tool-filter:disabled { color: var(--muted); cursor: not-allowed; }
+#filter-status { font-size: .93rem; color: var(--muted); }
+#filter-status strong { color: var(--mark); font-variant-numeric: tabular-nums; }
+.group { margin-top: 26px; }
+.group > h3 { font-size: .95rem; color: var(--muted); font-weight: 600; }
+.tool {
+  border-top: 1px solid var(--border);
+  padding: 14px 0;
+}
+.tool .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.tool .mcp { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-weight: 600; }
+.tool .twin { font-size: .86rem; color: var(--muted); }
+.tool .twin code { background: transparent; border: 0; padding: 0; font-size: .95em; }
+.tool p { color: var(--muted); font-size: .95rem; margin-top: 5px; max-width: 76ch; }
+#tool-empty { margin-top: 20px; color: var(--muted); }
+#tool-empty button {
+  font: inherit; cursor: pointer; min-height: 44px; padding: 0 16px; margin-top: 10px;
+  background: transparent; color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 8px;
+}
+#tool-empty button:hover { border-color: var(--accent); }
+[hidden] { display: none !important; }
+
+/* hooks */
+.hooks { list-style: none; margin-top: 22px; }
+.hooks li { border-left: 2px solid var(--border-strong); padding: 0 0 22px 18px; }
+.hooks li:last-child { padding-bottom: 0; }
+.hooks .event { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: .9rem; color: var(--accent); }
+.hooks h3 { margin-top: 2px; }
+.hooks p { color: var(--muted); font-size: .95rem; max-width: 74ch; }
+.hooks .caveat { color: var(--muted); font-size: .9rem; margin-top: 6px; }
+
+/* tables */
+.scroll { overflow-x: auto; margin-top: 22px; }
+table { border-collapse: collapse; width: 100%; font-size: .94rem; min-width: 520px; }
+th, td { text-align: left; padding: 10px 14px 10px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+tbody td:first-child { white-space: nowrap; }
+
+dl.pairs { margin-top: 22px; }
+dl.pairs dt { font-weight: 650; margin-top: 18px; }
+dl.pairs dt:first-child { margin-top: 0; }
+dl.pairs dd { color: var(--muted); margin-top: 4px; max-width: 76ch; }
+
+footer { padding: 34px 0 56px; color: var(--muted); font-size: .94rem; }
+footer ul { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+footer ul a { display: inline-flex; align-items: center; min-height: 44px; }
+footer p { margin-top: 10px; max-width: 72ch; }
 </style>
 </head>
 <body>
 
-<header>
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="masthead">
   <div class="wrap">
-    <img class="logo" src="logo.svg" alt="Agent Workbench logo" width="120" height="120">
-    <h1>Agent Workbench</h1>
-    <p class="tag">A local, dependency-free memory &amp; context layer for AI coding agents — a persistent cross-tool brain, a full-text code index, and setup diagnostics, all over MCP.</p>
-    <div class="btns">
-      <a class="btn primary" href="https://github.com/chud-lori/agent-workbench">View on GitHub</a>
-      <a class="btn" href="#quickstart">Quickstart</a>
+    <img src="logo.svg" alt="" width="30" height="30">
+    <span class="name">Agent Workbench</span>
+    <nav aria-label="Sections">
+      <a href="#install">Install</a>
+      <a href="#tools">Tools</a>
+      <a href="#hooks">Hooks</a>
+      <a href="#skills">Skills</a>
+      <a href="#config">Config</a>
+    </nav>
+    <div class="theme">
+      <span class="label" id="theme-label">Theme</span>
+      <div class="group" role="group" aria-labelledby="theme-label">
+        <button type="button" data-theme-choice="system" aria-pressed="true">Auto</button>
+        <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+      </div>
     </div>
-    <p class="harnesses">Works with <span>Claude Code</span>·<span>Codex</span>·<span>Gemini CLI</span></p>
   </div>
-</header>
+</div>
+
+<main id="main">
+
+<div class="hero">
+  <div class="wrap">
+    <img src="logo.svg" alt="Agent Workbench logo: a node mesh above a bench, with one lit core node" width="76" height="76">
+    <h1>Memory and context that survives the session</h1>
+    <p class="sub">Agent Workbench is a local MCP server and CLI. It gives every agent session on your machine a persistent cross-tool brain, a full-text index of your repos, and a report on whether its own setup is broken.</p>
+    <p class="facts"><strong>20</strong> MCP tools, each with a CLI twin. Stdlib-only Python, no third-party packages. No LLM calls and no network calls: every import is from the standard library, and none of them opens a socket.</p>
+    <div class="actions">
+      <a class="action primary" href="#install">Read the install steps</a>
+      <a class="action" href="https://github.com/chud-lori/agent-workbench">Source on GitHub</a>
+    </div>
+  </div>
+</div>
 
 <section>
   <div class="wrap">
-    <h2>What your agent gets</h2>
-    <p class="lede">Every AI coding session starts from zero: no memory of yesterday's decisions, no view across your repos, no idea whether its own setup is broken. Agent Workbench fixes all three — locally, deterministically, with zero dependencies.</p>
-    <div class="grid">
-      <div class="card">
-        <div class="emoji">🧠</div>
-        <h3>A persistent brain</h3>
-        <p>Durable notes — decisions, facts, gotchas, todos — stored in SQLite FTS with porter stemming, shared across <em>all</em> your AI tools and sessions. What Claude learns today, Codex recalls tomorrow. Every note carries a source breadcrumb (ticket, Slack thread, SHA-pinned permalink) so nothing becomes folklore.</p>
+    <h2>What it puts on the machine</h2>
+    <p class="lede">Three stores, one SQLite state directory, no service to run. The agent talks to them over MCP; you can talk to them over the CLI.</p>
+    <div class="surfaces">
+      <div>
+        <div class="panel">
+          <h3>A brain that outlives the session</h3>
+          <p>Durable notes, one of seven kinds: decision, fact, gotcha, preference, todo, note, or reference. They live in SQLite FTS5 with the porter tokenizer, in a file every harness on the machine reads, so a note stored from Claude Code comes back in Codex.</p>
+          <p>The repo's own convention is that a note carries a source breadcrumb (a ticket key, a Slack channel and date, a doc name, or a permalink pinned to a commit SHA). That is a convention in the standing instructions, not something the store enforces.</p>
+          <p>Correcting beats stacking: <code>brain_amend</code> edits a note in place, and <code>supersedes=[ids]</code> hides the notes a new one replaces, so a stale claim cannot resurface as truth.</p>
+        </div>
       </div>
-      <div class="card">
-        <div class="emoji">🔎</div>
-        <h3>A local code index</h3>
-        <p>Full-text bm25 search across all your repos in one call, with incremental refresh. No embeddings, no API calls — deterministic lexical retrieval; your agent does the semantic reasoning on top. Point it at any directories via <code>AGENT_WORKBENCH_INDEX_ROOTS</code>.</p>
-      </div>
-      <div class="card">
-        <div class="emoji">🩺</div>
-        <h3>Setup diagnostics</h3>
-        <p>Scans your machine for leaked secrets, broken MCP configs, over-broad permission allowlists, and stale agent docs. Because the agent's environment is part of the system too.</p>
+      <div>
+        <div class="panel">
+          <h3>A lexical code index</h3>
+          <p>One bm25 query across every indexed repo. No embeddings and no API calls, so the same query returns the same rows every time. Incremental refresh skips files whose hash has not changed. Point it anywhere with <code>AGENT_WORKBENCH_INDEX_ROOTS</code>.</p>
+        </div>
+        <div class="panel">
+          <h3>Diagnostics for the setup itself</h3>
+          <p>Five local scans: MCP config files, assistant permission allowlists, secrets sitting on disk, oversized state files, and doc paths that point at things no longer there. The agent's environment breaks too, and usually silently.</p>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<section class="alt">
+<section class="soft" id="install">
   <div class="wrap">
-    <h2>The memory loop, enforced by hooks</h2>
-    <p class="lede">Standing instructions make agents <em>likely</em> to use the brain; four Claude Code hooks make it <em>guaranteed</em>. The loop closes at the harness level — no model goodwill required.</p>
-    <div class="loop">
-      <div class="step"><b>Prime</b><span>Recent brain notes injected at session start — and re-primed after context compaction.</span><span class="hook">SessionStart</span></div>
-      <div class="step"><b>Recall</b><span>Every prompt is FTS-matched against the brain; relevant notes surface involuntarily, like human recall.</span><span class="hook">UserPromptSubmit</span></div>
-      <div class="step"><b>Store</b><span>Every turn ends with a memory checkpoint: durable knowledge gets saved or the turn ends clean.</span><span class="hook">Stop</span></div>
-      <div class="step"><b>Guard</b><span>Commands matching your danger patterns require explicit human approval — enforcement outside the model.</span><span class="hook">PreToolUse</span></div>
-    </div>
-    <p style="color: var(--muted); margin-top: 14px;">Plus two plain <b>git hooks</b> that keep commits attributed to you: one strips <code>Co-Authored-By</code> / &ldquo;Generated with&rdquo; attribution lines from commit messages, the other refuses a commit made under an assistant or bot identity. Vendor-neutral, so they hold for any coding agent — and for humans.</p>
-  </div>
-</section>
+    <h2>Install</h2>
+    <p class="lede">One requirement: Python 3.10 or newer. Nothing is installed with pip, no API key is asked for, and nothing is downloaded at runtime. <code>setup.sh</code> is a bash script that writes symlinks, so it targets a Unix shell.</p>
 
-<section>
-  <div class="wrap">
-    <h2>Skills and agent types</h2>
-    <p class="lede">The hooks capture knowledge from interactive work. Skills answer the questions a brain full of durable facts cannot, and brain-primed agent types carry recall into subagents — which receive no hooks at all.</p>
-    <div class="tools">
-      <table>
-        <tr><th>Skill</th><th>What it does</th></tr>
-        <tr><td><code>/standup</code></td><td>"What did I do yesterday?" — merges git, PRs, Slack, and calendar into a paste-ready Done / Today / Blockers. The brain stores durable facts, not an activity log.</td></tr>
-        <tr><td><code>/brain-harvest</code></td><td>Weekly backfill: scans merged PRs, resolved tickets, and Slack for durable knowledge the hooks missed. Approval-gated.</td></tr>
-        <tr><td><code>/postmortem</code></td><td>Incident reconstruction from evidence: timeline, blameless five-whys, action items with owners.</td></tr>
-        <tr><td><code>/why</code></td><td>Code archaeology: blame → commit → PR → ticket → Slack → brain, with a cited chain and an honest dead-end when no reason survives.</td></tr>
-        <tr><td><code>/pr-review</code></td><td>Opinionated review of a PR, branch, or diff: loads the project's recorded gotchas and decisions first, then checks comment noise, overengineering, security, algorithmic efficiency, simplicity, and maintainability. Findings cite a numbered rule and carry a concrete fix, and the review ends in a mechanical verdict rather than a diplomatic summary; posting to GitHub is approval-gated.</td></tr>
-        <tr><td><code>/meeting-prep</code></td><td>One-page brief for the next calendar event: what changed since last time, what you owe and are owed.</td></tr>
-      </table>
-      <table style="margin-top: 18px;">
-        <tr><th>Agent type</th><th>What it does</th></tr>
-        <tr><td><code>scout</code></td><td>Read-only investigator: recalls notes before searching the filesystem, cites <code>path:line</code> and <code>brain#id</code>, and reports notes the code contradicts.</td></tr>
-        <tr><td><code>implementer</code></td><td>Implements against recorded decisions, gotchas, and preferences; matches surrounding style; proves the change with the project's own checks.</td></tr>
-        <tr><td><code>adversary</code></td><td>Loads the project's known failure modes before reading a diff, then reports only findings with a concrete failure scenario.</td></tr>
-      </table>
-    </div>
-    <p style="color: var(--muted); margin-top: 14px;">A subagent gets no SessionStart priming and no prompt-recall injection, and inherits none of the parent's context — so recall has to live in its own system prompt or it never happens.</p>
-  </div>
-</section>
-
-<section id="quickstart">
-  <div class="wrap">
-    <h2>Quickstart</h2>
-    <p class="lede">One requirement: Python ≥ 3.10. No pip installs, no API keys, no network calls.</p>
-<pre><code>git clone https://github.com/chud-lori/agent-workbench.git
+    <ol class="steps">
+      <li>
+        <b>Clone and run the setup script</b>
+        <p>It is idempotent. Re-run it after a pull and it upgrades in place rather than duplicating anything.</p>
+        <div class="copyrow">
+<pre id="cmd-install"><code>git clone https://github.com/chud-lori/agent-workbench.git
 cd agent-workbench
 ./setup.sh</code></pre>
-    <p style="color: var(--muted); margin-top: 14px;"><code>setup.sh</code> detects your harnesses (Claude Code / Codex / Gemini CLI), registers the MCP server, installs the standing instructions, wires the hooks, and builds the code index. Idempotent — re-run anytime. <code>./uninstall.sh</code> reverses everything but keeps <code>.state/</code>: your brain survives.</p>
+          <button class="copy" type="button" data-copy="cmd-install">Copy</button>
+        </div>
+      </li>
+      <li>
+        <b>Answer the harness prompts</b>
+        <p>The script detects Claude Code, Codex, and Gemini CLI by looking for the <code>claude</code> binary and for <code>~/.claude</code>, <code>~/.codex</code>, and <code>~/.gemini</code>, then asks about each one. Answering no to all three exits without changing anything.</p>
+      </li>
+      <li>
+        <b>What it then does for the harnesses you picked</b>
+        <p>Registers the MCP server (user scope for Claude Code, a <code>[mcp_servers.agent_workbench]</code> block for Codex, an <code>mcpServers</code> entry for Gemini CLI). Writes the standing instructions into the harness instruction file inside a marker-fenced block, so a re-run refreshes that block instead of appending a second copy. For Claude Code it also wires the four hooks, symlinks the six skills and three agent types, and sets <code>cleanupPeriodDays</code> in <code>settings.json</code> if it is unset, because the 30 day default deletes session transcripts.</p>
+      </li>
+      <li>
+        <b>Build the index and restart the agent</b>
+        <p>The last prompt builds the code index over your repo root. The MCP server and the hooks load when the agent starts, so restart it afterwards.</p>
+      </li>
+    </ol>
+
+    <p class="note">Prefer doing it by hand? The per-harness commands are in <a href="https://github.com/chud-lori/agent-workbench/blob/main/AGENTS.md">AGENTS.md</a> under Harness setup. To back out, <code>./uninstall.sh</code> removes the hooks, the instruction blocks, the symlinks, and the MCP registrations. It never touches <code>.state/</code>, so the brain and the index survive an uninstall.</p>
   </div>
 </section>
 
-<section class="alt">
+<section id="tools">
   <div class="wrap">
-    <h2>The tools</h2>
-    <div class="tools">
+    <h2>MCP tool reference</h2>
+    <p class="lede">Every tool the server exposes, read from the <code>TOOLS</code> table in <code>agent_workbench/mcp_server.py</code>. Each line gives the MCP name and the CLI command that runs the same code, for shells, cron jobs, and hooks.</p>
+
+    <div class="filterbar">
+      <label for="tool-filter">Filter</label>
+      <input id="tool-filter" type="search" placeholder="Filter needs JavaScript" autocomplete="off" disabled aria-describedby="filter-status">
+      <span id="filter-status" role="status">Filter is starting. All 20 tools are listed below.</span>
+    </div>
+
+    <div id="tool-list">
+      <div class="group" data-group>
+        <h3>Task start</h3>
+        <div class="tool">
+          <div class="head"><span class="mcp">brief_task</span> <span class="twin">CLI: <code>run_cli.py brief "&lt;query&gt;"</code></span></div>
+          <p>One call for a ticket key or feature phrase: code index hits, agent docs, saved brain notes, pinned references, likely repos, and the commands those repos run. When the query mentions prod or deploy it also checks the likely repo against its origin baseline and warns if the checkout has diverged.</p>
+        </div>
+      </div>
+
+      <div class="group" data-group>
+        <h3>Brain</h3>
+        <div class="tool">
+          <div class="head"><span class="mcp">brain_remember</span> <span class="twin">CLI: <code>run_cli.py remember</code></span></div>
+          <p>Store a durable note with a kind, a project, and tags. The result can include <code>similar_notes</code>, which is the prompt to amend or supersede rather than stack a near-duplicate. Pass <code>supersedes=[ids]</code> to hide the notes this one corrects.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">brain_recall</span> <span class="twin">CLI: <code>run_cli.py recall</code></span></div>
+          <p>Search notes by query, project, or kind, or omit the query for the most recent. <code>thread=&lt;key&gt;</code> returns one storyline in chronological order with superseded entries collapsed to stubs. <code>since</code> and <code>until</code> bound by when a note was stored, and accept <code>yesterday</code>, a date, or <code>7d</code>. Resolved and superseded notes stay hidden unless you ask for them.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">brain_amend</span> <span class="twin">CLI: <code>run_cli.py amend</code></span></div>
+          <p>Correct a note in place. <code>append</code> adds a dated addendum, <code>replace</code> rewrites the body.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">brain_promote</span> <span class="twin">CLI: <code>run_cli.py promote</code></span></div>
+          <p>Append a personal note to a shared, git-versioned markdown file (a team playbook or a runbook), and stamp the note so it can never be promoted twice.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">brain_resolve</span> <span class="twin">CLI: <code>run_cli.py resolve &lt;id&gt;</code></span></div>
+          <p>Mark a note done. It is kept and hidden from default recall, because the history of a todo is worth more than its absence.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">brain_forget</span> <span class="twin">CLI: <code>run_cli.py forget &lt;id&gt;</code></span></div>
+          <p>Delete a note by id. Ids come from <code>brain_recall</code>.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">brain_export</span> <span class="twin">CLI: <code>run_cli.py export</code></span></div>
+          <p>Dump every note, resolved ones included, as markdown, optionally straight to a file. This is the backup: the brain is the only part of the state directory that cannot be rebuilt.</p>
+        </div>
+      </div>
+
+      <div class="group" data-group>
+        <h3>Code index and docs</h3>
+        <div class="tool">
+          <div class="head"><span class="mcp">code_search</span> <span class="twin">CLI: <code>run_cli.py code-search "&lt;query&gt;"</code></span></div>
+          <p>bm25 keyword search over every indexed repo at once.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">refresh_code_index</span> <span class="twin">CLI: <code>run_cli.py refresh-index</code></span></div>
+          <p>Incremental refresh that skips unchanged files. This is the one to run on a stale-index warning.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">rebuild_code_index</span> <span class="twin">CLI: <code>run_cli.py index</code></span></div>
+          <p>Full rebuild. Needed after changing the index roots. Writes only inside the workbench state directory.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">index_status</span> <span class="twin">CLI: <code>run_cli.py index-status</code></span></div>
+          <p>Freshness report: how many repos and documents are indexed, and how many hours old that is.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">codebase_overview</span> <span class="twin">CLI: <code>run_cli.py overview</code></span></div>
+          <p>Languages, package files, and docs for an indexed repo, or for all of them.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">search_knowledge</span> <span class="twin">CLI: <code>run_cli.py search "&lt;query&gt;"</code></span></div>
+          <p>Live search over the agent docs themselves: <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>SKILL.md</code>, and README files. Read from disk at query time rather than from the index.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">find_service_context</span> <span class="twin">CLI: <code>run_cli.py service &lt;name&gt;</code></span></div>
+          <p>Given a service name, the likely repo and the commands that repo runs.</p>
+        </div>
+      </div>
+
+      <div class="group" data-group>
+        <h3>Repo and activity</h3>
+        <div class="tool">
+          <div class="head"><span class="mcp">repo_state</span> <span class="twin">CLI: <code>run_cli.py repo-state &lt;repo&gt;</code></span></div>
+          <p>Current branch, ahead and behind counts against <code>origin/main</code> or <code>origin/master</code>, dirty files, how stale the last fetch is, and whether the path is a linked worktree rather than the main checkout. Run it before making any claim about how production behaves from local code.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">recent_activity</span> <span class="twin">CLI: <code>run_cli.py activity</code></span></div>
+          <p>Commits you made in a window, across every local repo, scanning all branches so unpushed work that <code>gh</code> cannot see still shows up. Linked worktrees fold into their main checkout so nothing is counted twice. Commits only: the server has no network access, so pair it with Slack, calendar, and PR lookups for the rest.</p>
+        </div>
+      </div>
+
+      <div class="group" data-group>
+        <h3>Diagnostics</h3>
+        <div class="tool">
+          <div class="head"><span class="mcp">doctor_report</span> <span class="twin">CLI: <code>run_cli.py doctor</code></span></div>
+          <p>Findings from five scans: MCP config files, assistant permission allowlists, secrets on disk, oversized state, and stale doc paths.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">mcp_health</span> <span class="twin">CLI: <code>run_cli.py mcp-check</code></span></div>
+          <p>Config health for the Codex, Claude, and project-level MCP files on this machine.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">work_sources_status</span> <span class="twin">CLI: <code>run_cli.py work-sources</code></span></div>
+          <p>Whether the optional connector sidecar (Slack, Google Workspace, Atlassian) is present and healthy. It reports state only and never prints a secret.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="tool-empty" hidden>
+      <p>No tool name or description matches that filter. Tool names use underscores, as in <code>brain_recall</code>.</p>
+      <button type="button" id="clear-filter">Clear the filter</button>
+    </div>
+
+    <p class="note">Three CLI commands have no MCP twin: <code>context</code> summarises one path, <code>recall-brief</code> returns the compact note lines the prompt hook injects, and <code>mcp-server</code> is what the MCP registration actually runs.</p>
+  </div>
+</section>
+
+<section class="soft" id="hooks">
+  <div class="wrap">
+    <h2>The four Claude Code hooks</h2>
+    <p class="lede">Standing instructions make an agent likely to use the brain. The hooks make two thirds of the loop happen whether or not the model cooperates, because the harness runs them, not the model. <code>harness/install_hooks.py</code> wires them, recognises its own entries even if the clone moved, and upgrades them in place.</p>
+    <ol class="hooks">
+      <li>
+        <span class="event">SessionStart</span>
+        <h3>Prime</h3>
+        <p>Prints up to five recent brain notes into the session context, each trimmed to 140 characters, with ids so the agent can pull the full body. Registered with the matcher <code>startup|resume|compact</code>, so the brain re-primes after a context compaction instead of quietly fading mid-session. Timeout 20 seconds.</p>
+        <p class="caveat">It then detaches a background job that refreshes the code index and, if your clone has no uncommitted changes, fast-forwards it with <code>git pull --ff-only</code>. A clone with work in progress is left alone.</p>
+      </li>
+      <li>
+        <span class="event">UserPromptSubmit</span>
+        <h3>Recall</h3>
+        <p>Matches your prompt against the brain and injects up to five one-line hits, ids included. Bodies stay pull-based through <code>brain_recall</code>, so the injection stays small. Timeout 10 seconds.</p>
+        <p class="caveat">The CLI side is threshold-gated: a short or trivial prompt injects nothing rather than noise.</p>
+      </li>
+      <li>
+        <span class="event">Stop</span>
+        <h3>Store</h3>
+        <p>When a turn ends, blocks the stop once and tells the model to save anything durable it learned. If nothing durable came up, the model is told to end immediately, so the extra pass stays cheap. Timeout 10 seconds.</p>
+        <p class="caveat">It blocks once and only once. The hook input carries a flag that is true when the model is already continuing from a previous block, and in that case the hook stays silent, so it cannot loop.</p>
+      </li>
+      <li>
+        <span class="event">PreToolUse</span>
+        <h3>Guard</h3>
+        <p>Matches Bash commands against your own regex patterns and forces an explicit human approval on a hit. The check runs outside the model, so a convincing but wrong chain of reasoning cannot talk its way past it. Timeout 10 seconds.</p>
+        <p class="caveat">Inert by default. The patterns file is per-machine and untracked, and a missing or empty file makes the hook a silent no-op. <code>setup.sh</code> offers to seed it from the shipped example.</p>
+      </li>
+    </ol>
+    <p class="note">All four scripts are best-effort by design and always exit zero. A hook that can break session start is worse than a hook that occasionally does nothing.</p>
+    <p class="note">Two plain git hooks in <code>harness/git-hooks/</code> sit alongside them and keep commits attributed to the person who owns the repo, for any assistant rather than one vendor. <code>commit-msg</code> strips <code>Co-Authored-By</code> and "Generated with" attribution lines and says what it removed; <code>pre-commit</code> refuses a commit authored or committed under an assistant or bot identity, or with no email set. They chain to any repo-local hooks, keep real human co-authors, and leave prose that merely mentions these tools alone. Enable them for one repo through <code>.git/hooks</code>, or globally with <code>git config --global core.hooksPath</code>; <code>setup.sh</code> offers both.</p>
+  </div>
+</section>
+
+<section id="skills">
+  <div class="wrap">
+    <h2>Skills and agent types</h2>
+    <p class="lede">The hooks capture what happens in interactive work. Skills answer the questions a store of durable facts cannot, and the agent types carry recall into subagents, which get no hooks at all.</p>
+
+    <dl class="pairs">
+      <dt><code>/standup</code></dt>
+      <dd>What you did in a day, rebuilt from git commits, PRs, Slack, calendar, and brain notes, as a paste-ready Done, Today, Blockers. The brain is deliberately not the source here: it holds durable facts, not an activity log.</dd>
+      <dt><code>/brain-harvest</code></dt>
+      <dd>Weekly backfill. Scans merged PRs, resolved tickets, and your Slack activity for durable knowledge the hooks missed, dedupes against existing notes, and proposes. Nothing is stored without your approval.</dd>
+      <dt><code>/postmortem</code></dt>
+      <dd>Incident reconstruction from evidence: a timeline from Slack, commits, deploys, PRs, and tickets, then a blameless five whys and a draft with action items.</dd>
+      <dt><code>/why</code></dt>
+      <dd>Code archaeology for one file, function, or line, climbing blame to commit to PR to ticket to Slack to brain. It says plainly when no reason was ever recorded, rather than inventing one.</dd>
+      <dt><code>/pr-review</code></dt>
+      <dd>Reviews a PR, branch, or working diff against the project's recorded conventions plus six axes: comment noise, overengineering, security, algorithmic efficiency, simplicity, and maintainability. Findings cite a numbered rule and carry a concrete fix, and the review closes on a mechanical Gate/Justify/Lock verdict rather than a diplomatic summary. Posting to GitHub is approval-gated.</dd>
+      <dt><code>/meeting-prep</code></dt>
+      <dd>A one-page brief for a calendar event, merged from related Slack threads, tickets, PRs, and notes. It briefs from evidence and does not invent agenda items.</dd>
+    </dl>
+
+    <div class="scroll">
       <table>
-        <tr><th>Tool</th><th>What it does</th></tr>
-        <tr><td><code>brief_task</code></td><td>The task-start context pack: one call merging code hits, doc hits, matching brain notes, likely repos, and runnable commands — with a warning when a local checkout diverges from deployed reality.</td></tr>
-        <tr><td><code>brain_remember</code> / <code>brain_recall</code></td><td>Store and search durable notes (decision / fact / gotcha / preference / todo / reference). <code>supersedes</code> retires corrected notes; <code>thread=</code> gives a chronological storyline digest.</td></tr>
-        <tr><td><code>brain_amend</code> / <code>brain_resolve</code> / <code>brain_promote</code></td><td>Correct a note in place, mark a todo done (kept, hidden), or promote a proven personal note into a team playbook.</td></tr>
-        <tr><td><code>code_search</code></td><td>bm25 keyword search across every indexed repo at once.</td></tr>
-        <tr><td><code>recent_activity</code></td><td>Commits you made in a time window across every local repo, all branches — so unpushed work <code>gh</code> cannot see still shows up. Linked worktrees fold into their main checkout, so nothing is counted twice.</td></tr>
-        <tr><td><code>repo_state</code></td><td>Branch, ahead/behind origin, dirty state, and whether you are standing in a linked worktree — run before claiming how production behaves.</td></tr>
-        <tr><td><code>search_knowledge</code></td><td>Live search over agent docs: CLAUDE.md, AGENTS.md, SKILL.md, READMEs.</td></tr>
-        <tr><td><code>doctor_report</code> / <code>mcp_health</code></td><td>Secrets on disk, broken MCP configs, over-broad permissions, stale docs.</td></tr>
+        <caption class="lede" style="caption-side: top; text-align: left; margin-bottom: 10px;">Three subagent types, symlinked into <code>~/.claude/agents/</code>.</caption>
+        <thead>
+          <tr><th scope="col">Type</th><th scope="col">What it does</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>scout</code></td><td>Read-only investigator. Checks recorded memory before searching the filesystem, cites <code>path:line</code> and note ids, and reports notes the code now contradicts.</td></tr>
+          <tr><td><code>implementer</code></td><td>Writes code against recorded decisions, gotchas, and preferences, follows the surrounding style, and reports the change with proof it works.</td></tr>
+          <tr><td><code>adversary</code></td><td>Loads the project's known failure modes first, then hunts for the bug that history says is likely. Reports a finding with a concrete failure scenario, or reports nothing.</td></tr>
+        </tbody>
       </table>
     </div>
-    <p style="color: var(--muted); margin-top: 14px;">Every tool has a CLI twin (<code>python3 run_cli.py …</code>) for shells, cron jobs, and hooks.</p>
+
+    <p class="note">A subagent gets no SessionStart priming, no prompt-recall injection, and none of the parent's context. Recall has to live in its own system prompt or it never happens, which is the entire reason these three types exist.</p>
+  </div>
+</section>
+
+<section class="soft" id="config">
+  <div class="wrap">
+    <h2>Configuration</h2>
+    <p class="lede">Six environment variables, all with defaults. Nothing is hardcoded to a particular machine layout except the state directory default, which is noted below.</p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Variable</th><th scope="col">Default</th><th scope="col">What it sets</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>AGENT_WORKBENCH_REPO_ROOT</code></td><td><code>~/repo</code></td><td>Where your work repos live.</td></tr>
+          <tr><td><code>AGENT_WORKBENCH_INDEX_ROOTS</code></td><td>the repo root</td><td>Directories to index. Colon or comma separated.</td></tr>
+          <tr><td><code>AGENT_WORKBENCH_PROJECTS_ROOT</code></td><td><code>~/Projects</code></td><td>Second root that diagnostics and activity scanning cover.</td></tr>
+          <tr><td><code>AGENT_WORKBENCH_STATE_DIR</code></td><td><code>~/Projects/agent-workbench/.state</code></td><td>Where <code>index.sqlite</code> and <code>brain.sqlite</code> are written. The default is a fixed path, not a path relative to the clone, so set this if you cloned somewhere else.</td></tr>
+          <tr><td><code>AGENT_WORKBENCH_WORK_MCP_ROOT</code></td><td><code>~/Projects/work-mcp</code></td><td>The optional connector sidecar that <code>work_sources_status</code> looks for.</td></tr>
+          <tr><td><code>AGENT_WORKBENCH_CLAUDE_HOME</code><br><code>AGENT_WORKBENCH_CODEX_HOME</code></td><td><code>~/.claude</code><br><code>~/.codex</code></td><td>Harness config locations the diagnostics read.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">The state directory is gitignored. <code>index.sqlite</code> is rebuildable at any time; <code>brain.sqlite</code> is the one file worth backing up, and <code>brain_export</code> is how.</p>
   </div>
 </section>
 
 <section>
   <div class="wrap">
-    <h2>Design principles</h2>
-    <ul class="principles">
-      <li><b>Lexical, not RAG.</b> Retrieval is SQLite FTS5 + bm25 — exact, explainable, zero-dependency. Query expansion and synthesis are the LLM's job.</li>
-      <li><b>No LLM, no network.</b> The workbench is pure deterministic retrieval; your agent harness provides all the reasoning.</li>
-      <li><b>State is local and disposable.</b> Everything lives in a gitignored <code>.state/</code>; the index rebuilds anytime, and the brain exports to markdown.</li>
-      <li><b>Personal brain, shared playbooks.</b> The brain is yours; teams share through git-versioned markdown via <code>brain_promote</code>.</li>
-      <li><b>Credentials stay out.</b> Slack/Google connectors live in an optional <a href="https://github.com/chud-lori/work-mcp">sidecar project</a> — connector secrets never flow through the workbench.</li>
-    </ul>
+    <h2>Why it is built this way</h2>
+    <dl class="pairs">
+      <dt>Lexical retrieval, not RAG</dt>
+      <dd>SQLite FTS5 and bm25. Exact, explainable, and reproducible: the same query returns the same rows, and a miss is a query problem you can see rather than a distance threshold you cannot. Query expansion and synthesis are the model's job, and the model is already in the room.</dd>
+      <dt>No LLM calls, no network calls</dt>
+      <dd>The package imports only the standard library, and none of those imports opens a socket. Git is shelled out to; nothing else leaves the machine.</dd>
+      <dt>The brain is personal, playbooks are shared</dt>
+      <dd>Notes are yours and live in your state directory. Teams share through git-versioned markdown, which is what <code>brain_promote</code> writes into. Evidence and one-off details stay personal.</dd>
+      <dt>State is local and mostly disposable</dt>
+      <dd>Everything lives under the gitignored state directory. The index can be thrown away and rebuilt. The brain cannot, which is why export exists and why uninstall refuses to touch it.</dd>
+      <dt>Connector credentials live elsewhere</dt>
+      <dd>The Slack and Google Workspace connectors are a separate project, <a href="https://github.com/chud-lori/work-mcp">work-mcp</a>. Agent Workbench does not need it and only reports whether it is present, so connector secrets never flow through this codebase.</dd>
+      <dt>Worktrees are one repo</dt>
+      <dd>A repository is identified by its shared git directory, so a linked worktree folds into its main checkout: commits are counted once, the index keeps one checkout per repository, and <code>repo_state</code> tells the agent when it is standing in a worktree.</dd>
+    </dl>
   </div>
 </section>
+
+</main>
 
 <footer>
   <div class="wrap">
-    <a href="https://github.com/chud-lori/agent-workbench">GitHub</a>
-    <a href="https://github.com/chud-lori/agent-workbench/blob/main/AGENTS.md">Agent guide</a>
-    <a href="https://github.com/chud-lori/agent-workbench/blob/main/ARCHITECTURE.md">Architecture</a>
-    <p style="margin-top: 14px;">Built by <a href="https://github.com/chud-lori">Lori</a> · stdlib-only Python · no LLM calls, ever</p>
+    <ul>
+      <li><a href="https://github.com/chud-lori/agent-workbench">Repository</a></li>
+      <li><a href="https://github.com/chud-lori/agent-workbench/blob/main/README.md">README</a></li>
+      <li><a href="https://github.com/chud-lori/agent-workbench/blob/main/AGENTS.md">Agent guide</a></li>
+      <li><a href="https://github.com/chud-lori/agent-workbench/blob/main/ARCHITECTURE.md">Architecture</a></li>
+      <li><a href="https://github.com/chud-lori/agent-workbench/issues">Issues</a></li>
+    </ul>
+    <p>Built by <a href="https://github.com/chud-lori">Lori</a>. This page is hand-written from the repository source; the tool list is the server's own <code>TOOLS</code> table.</p>
   </div>
 </footer>
+
+<script>
+(function () {
+  "use strict";
+
+  /* Theme. Three states, because "follow the OS" is a real answer and not the
+     same as either fixed choice. Stored per browser; a storage failure (private
+     window, blocked site data) falls back to Auto rather than breaking. */
+  var root = document.documentElement;
+  var buttons = Array.prototype.slice.call(document.querySelectorAll("[data-theme-choice]"));
+  var KEY = "aw-theme";
+
+  function applyTheme(choice) {
+    if (choice === "light" || choice === "dark") {
+      root.setAttribute("data-theme", choice);
+    } else {
+      root.removeAttribute("data-theme");
+      choice = "system";
+    }
+    buttons.forEach(function (btn) {
+      btn.setAttribute("aria-pressed", String(btn.getAttribute("data-theme-choice") === choice));
+    });
+  }
+
+  var stored = null;
+  try { stored = window.localStorage.getItem(KEY); } catch (err) { stored = null; }
+  applyTheme(stored || "system");
+
+  buttons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var choice = btn.getAttribute("data-theme-choice");
+      applyTheme(choice);
+      try { window.localStorage.setItem(KEY, choice); } catch (err) { /* nothing to do: the theme still applied for this page */ }
+    });
+  });
+
+  /* Tool filter. The input ships disabled so that with JavaScript off it reads
+     as unavailable instead of as a dead control; enabling it here is the
+     handover from the static list to the filtered one. */
+  var input = document.getElementById("tool-filter");
+  var status = document.getElementById("filter-status");
+  var empty = document.getElementById("tool-empty");
+  var clear = document.getElementById("clear-filter");
+  var groups = Array.prototype.slice.call(document.querySelectorAll("[data-group]"));
+  var tools = Array.prototype.slice.call(document.querySelectorAll(".tool"));
+  var total = tools.length;
+
+  tools.forEach(function (tool) {
+    tool.setAttribute("data-haystack", tool.textContent.toLowerCase().replace(/\s+/g, " "));
+  });
+
+  function runFilter(raw) {
+    var term = raw.trim().toLowerCase();
+    var shown = 0;
+
+    tools.forEach(function (tool) {
+      var match = !term || tool.getAttribute("data-haystack").indexOf(term) !== -1;
+      tool.hidden = !match;
+      if (match) { shown += 1; }
+    });
+
+    groups.forEach(function (group) {
+      var anyVisible = Array.prototype.some.call(group.querySelectorAll(".tool"), function (tool) {
+        return !tool.hidden;
+      });
+      group.hidden = !anyVisible;
+    });
+
+    empty.hidden = shown !== 0;
+
+    if (!term) {
+      status.innerHTML = "Showing all <strong>" + total + "</strong> tools.";
+    } else if (shown === 0) {
+      status.innerHTML = "<strong>0</strong> of " + total + " tools match.";
+    } else {
+      status.innerHTML = "Showing <strong>" + shown + "</strong> of " + total + " tools.";
+    }
+  }
+
+  try {
+    input.disabled = false;
+    input.placeholder = "brain, index, worktree, doctor";
+    runFilter("");
+    input.addEventListener("input", function () { runFilter(input.value); });
+    input.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && input.value !== "") {
+        event.preventDefault();
+        input.value = "";
+        runFilter("");
+      }
+    });
+    clear.addEventListener("click", function () {
+      input.value = "";
+      runFilter("");
+      input.focus();
+    });
+  } catch (err) {
+    /* If wiring fails the reference itself must still be readable, so every
+       tool is unhidden and the control goes back to being visibly unavailable
+       rather than looking usable and doing nothing. */
+    tools.forEach(function (tool) { tool.hidden = false; });
+    groups.forEach(function (group) { group.hidden = false; });
+    empty.hidden = true;
+    input.value = "";
+    input.disabled = true;
+    input.placeholder = "Filter unavailable";
+    status.textContent = "The filter could not start, so all " + total + " tools are listed below.";
+  }
+
+  /* Copy buttons. The clipboard API is unavailable on insecure origins and in
+     some embedded browsers, so the failure path says what to do instead of
+     pretending the copy happened. */
+  Array.prototype.forEach.call(document.querySelectorAll(".copy"), function (button) {
+    var source = document.getElementById(button.getAttribute("data-copy"));
+    var idle = button.textContent;
+    var timer = null;
+
+    function report(state, text) {
+      button.setAttribute("data-state", state);
+      button.textContent = text;
+      if (timer) { window.clearTimeout(timer); }
+      timer = window.setTimeout(function () {
+        button.removeAttribute("data-state");
+        button.textContent = idle;
+      }, 4000);
+    }
+
+    button.addEventListener("click", function () {
+      var text = source.innerText;
+      if (!navigator.clipboard || !navigator.clipboard.writeText) {
+        report("failed", "Select it manually");
+        return;
+      }
+      navigator.clipboard.writeText(text).then(function () {
+        report("done", "Copied");
+      }, function () {
+        report("failed", "Copy blocked");
+      });
+    });
+  });
+})();
+</script>
 
 </body>
 </html>
