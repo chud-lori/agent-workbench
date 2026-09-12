@@ -53,6 +53,18 @@ for agent_file in "$WORKBENCH"/harness/agents/*.md; do
     info "unlinked agent '$(basename "$agent_file")' from ~/.claude/agents."
   fi
 done
+
+for hook in commit-msg pre-commit; do
+  target="$WORKBENCH/.git/hooks/$hook"
+  if [ -L "$target" ] && [ "$(readlink "$target")" = "$WORKBENCH/harness/git-hooks/$hook" ]; then
+    rm "$target"
+    info "unlinked git hook '$hook' from this repo."
+  fi
+done
+if [ "$(git config --global core.hooksPath || true)" = "$WORKBENCH/harness/git-hooks" ]; then
+  git config --global --unset core.hooksPath
+  info "unset global core.hooksPath."
+fi
 if command -v claude >/dev/null 2>&1 && claude mcp get agent-workbench >/dev/null 2>&1; then
   claude mcp remove --scope user agent-workbench
   info "unregistered MCP 'agent-workbench' from Claude Code."

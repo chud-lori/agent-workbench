@@ -136,7 +136,7 @@ Degrades cleanly: any missing source is skipped and called out, since a silently
 - `/postmortem` — reconstruct an incident from Slack + `recent_activity` + deploys + PRs + tickets into a timeline (cause introduced → detected → mitigated → resolved), a blameless five-whys, and a draft with owned action items. Ends by *proposing* one root-cause `gotcha` for the brain — approval-gated.
 - `/why` — code archaeology: climb blame → commit → PR → ticket → Slack → brain to answer "why does this code exist", with a cited evidence chain and an honest "no recorded reason survives" when the chain dead-ends.
 - `/meeting-prep` — one-page brief for the next calendar event: agenda + what changed since last occurrence + what you owe / are owed + likely topics, from calendar, Slack, Jira, PRs, and brain notes.
-- `/pr-review` — opinionated review of a GitHub PR, branch, or working diff: loads the project's recorded gotchas/decisions first (a change that walks back into a recorded trap is the highest-value finding), then checks comment noise, overengineering, security, algorithmic efficiency, simplicity, and maintainability. Every finding needs a concrete fix; an "overengineered" call must name the simpler alternative and an "inefficient" one must name the scale where it hurts. Posting to GitHub is approval-gated and never `--approve`s. Complements Claude Code's built-in `/code-review` (correctness bugs) rather than duplicating it.
+- `/pr-review` — opinionated review of a GitHub PR, branch, or working diff: loads the project's recorded gotchas/decisions first (a change that walks back into a recorded trap is the highest-value finding), then checks comment noise, overengineering, security, algorithmic efficiency, simplicity, and maintainability. Every finding needs a concrete fix; an "overengineered" call must name the simpler alternative and an "inefficient" one must name the scale where it hurts. Posting to GitHub is approval-gated and never `--approve`s. Complements Claude Code's built-in `/code-review` (correctness bugs) rather than duplicating it. Findings cite numbered rules from `harness/skills/pr-review/rules.md` (CR-01…CR-37, tiered Gate / Justify / Lock, each naming the evidence it demands) and the review closes with a mechanical verdict — FAIL on any Gate finding, PASS WITH FIXES, or an honest PASS. CR-35…37 make a recorded gotcha, decision, or preference outrank any generic review opinion.
 
 setup.sh symlinks every directory under `harness/skills/`, so these install with the rest; manually:
 
@@ -161,6 +161,24 @@ for a in "$WORKBENCH"/harness/agents/*.md; do ln -s "$a" ~/.claude/agents/"$(bas
 The parent's half of the job is a standing instruction: hand a subagent *evidence* (file:line, the snippet, `brain#id`), not conclusions it must re-derive.
 
 **12. Transcript retention (Claude Code):** setup.sh sets `cleanupPeriodDays: 3650` in `~/.claude/settings.json` when unset. Claude Code otherwise prunes `~/.claude/projects` after **30 days**, silently deleting session history on a rolling basis. An existing value is left alone.
+
+**13. Install the commit attribution guard (any agent, any harness):** two plain git hooks in `harness/git-hooks/`, so the rule holds for *every* assistant that commits — and for humans — rather than depending on one vendor's instructions:
+
+- `commit-msg` **strips** AI-attribution lines (`Co-Authored-By:` / `Assisted-by:` naming an assistant, `Generated with …`, robot-emoji lines) and reports what it removed. It strips rather than rejects because the outcome that matters is a clean message, and stripping reaches it in one pass even when an agent's own harness keeps re-adding the trailer.
+- `pre-commit` **refuses** a commit whose author or committer is an assistant/bot identity, or whose email is unset. Identity is fixed before the message exists and a hook cannot rewrite it, so this one must reject.
+
+Both chain to a repo-local hook of the same name afterwards, so enabling them machine-wide never silently disables a project's own hooks.
+
+```bash
+# this repo only
+ln -s "$WORKBENCH/harness/git-hooks/commit-msg" .git/hooks/commit-msg
+ln -s "$WORKBENCH/harness/git-hooks/pre-commit" .git/hooks/pre-commit
+
+# or every repo on the machine
+git config --global core.hooksPath "$WORKBENCH/harness/git-hooks"
+```
+
+Why it exists: an AI trailer that reaches GitHub attaches a bot account to the repository's contributor graph, and that cache persists long after the trailer is scrubbed. `git commit --no-verify` still bypasses the hooks by design — this is a guardrail against automation, not a lock against the repo owner. Human co-authors and prose that merely mentions these tools are deliberately left alone (`tests/test_commit_guard.py`).
 
 ## Measuring the brain (blind replay)
 
@@ -190,5 +208,6 @@ Regression tests live in `tests/test_worktree.py` and build a real worktree.
 
 - Python ≥3.10, stdlib only — do not add dependencies. `tomllib` is 3.11+, so it is imported through `util.load_toml()`, which raises a named reason on 3.10; callers must report that they could not read a file rather than reporting it as absent (`tests/test_portability.py` guards this).
 - State lives in `.state/` (`index.sqlite`, `brain.sqlite`); never commit it.
+- Shell hooks in `harness/git-hooks/` are POSIX `sh`, not bash, and are matched with `grep -E` — write alternations as `a|b`, never `a\|b` (inside `-E` that is a literal pipe, which once silently disabled the whole vendor list).
 - Index roots default to `~/repo`; override via `AGENT_WORKBENCH_INDEX_ROOTS` (colon/comma-separated) or explicit `roots` args. Doctor intentionally also scans `~/Projects`.
 - Smoke test after changes: pipe `initialize` + `tools/list` JSON-RPC lines into `run_mcp.py` and check the reply.

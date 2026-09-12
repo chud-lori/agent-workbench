@@ -1,0 +1,50 @@
+#!/bin/sh
+# Keep AI attribution out of commit messages — for ANY assistant, not one vendor.
+#
+# Strips rather than rejects: the outcome that matters is a clean message, and
+# stripping reaches it in one pass even when an agent has been instructed by its
+# own harness to add the trailer back. What was removed is printed, so nothing
+# happens silently.
+#
+# Installed by agent-workbench setup.sh, either per-repo or machine-wide via
+# git config core.hooksPath. Bypassable with `git commit --no-verify` by design:
+# this is a guardrail for automation, not a lock against its owner.
+set -u
+
+MSG_FILE="$1"
+[ -f "$MSG_FILE" ] || exit 0
+
+# Trailer/line patterns to remove. Case-insensitive, anchored to line starts so
+# prose that merely discusses these strings is never touched.
+#   1. Co-authored-by / Signed-off-by naming an assistant or its service account
+#   2. "Generated with <tool>" advertising lines, with or without the robot emoji
+#   3. Assistant-attribution trailers some tools emit
+AI='claude|anthropic|copilot|cursor|codex|openai|chatgpt|gpt-[0-9]|gemini|bard|devin|aider|windsurf|cline|continue\.dev|sourcegraph|tabnine|codewhisperer|replit|jules|amp-code|assistant|\[bot\]|bot@|noreply@'
+
+BEFORE=$(wc -l < "$MSG_FILE")
+TMP="$MSG_FILE.aw.$$"
+
+grep -viE "^[[:space:]]*(co-authored-by|signed-off-by|assisted-by|generated-by|authored-by)[[:space:]]*:.*($AI)" "$MSG_FILE" \
+  | grep -viE "^[[:space:]]*(🤖[[:space:]]*)?(generated|created|written|co-written)[[:space:]]+(with|by)[[:space:]]+.*($AI)" \
+  | grep -viE "^[[:space:]]*🤖" > "$TMP" 2>/dev/null || { rm -f "$TMP"; exit 0; }
+
+AFTER=$(wc -l < "$TMP")
+if [ "$BEFORE" -ne "$AFTER" ]; then
+  # Drop trailing blank lines left behind by the removal.
+  awk 'BEGIN{blank=0} {lines[NR]=$0} END{last=NR; while (last>0 && lines[last] ~ /^[[:space:]]*$/) last--; for(i=1;i<=last;i++) print lines[i]}' "$TMP" > "$MSG_FILE"
+  rm -f "$TMP"
+  removed=$((BEFORE - AFTER))
+  echo "agent-workbench: removed $removed AI-attribution line(s) from the commit message." >&2
+  echo "  Commits stay attributed to the repository owner's account only." >&2
+else
+  rm -f "$TMP"
+fi
+
+# Chain to a repo-local hook when we are running as core.hooksPath, so setting
+# that globally does not silently disable a project's own hooks.
+LOCAL="$(git rev-parse --git-path hooks/commit-msg 2>/dev/null)"
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+if [ -n "$LOCAL" ] && [ -x "$LOCAL" ] && [ "$(cd "$(dirname "$LOCAL")" && pwd)/$(basename "$LOCAL")" != "$SELF" ]; then
+  exec "$LOCAL" "$@"
+fi
+exit 0

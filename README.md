@@ -91,7 +91,7 @@ Six skills under `harness/skills/` share one pattern: gather from every work sou
 - `/brain-harvest` — weekly backfill: scan merged PRs, resolved tickets, and Slack for durable knowledge the hooks missed; approval-gated
 - `/postmortem` — incident reconstruction: evidence timeline, blameless five-whys, action items with owners; proposes one root-cause gotcha for the brain
 - `/why` — code archaeology: blame → commit → PR → ticket → Slack → brain, answering "why does this code exist" with a cited chain
-- `/pr-review` — reviews a PR/branch/diff against the project's recorded conventions plus six axes: comment noise, overengineering, security, efficiency, simplicity, maintainability
+- `/pr-review` — reviews a PR/branch/diff against the project's recorded conventions plus six axes (comment noise, overengineering, security, efficiency, simplicity, maintainability), citing numbered rules and closing with a Gate/Justify/Lock verdict
 - `/meeting-prep` — one-page brief for the next calendar event: what changed since last time, what you owe / are owed, likely topics
 
 ## Agent types (Claude Code)
@@ -104,6 +104,19 @@ live in their own system prompt. `harness/agents/` ships three types that do:
 - `adversary` — loads known failure modes first, then reviews a diff for findings with a concrete failure scenario
 
 setup.sh symlinks them into `~/.claude/agents/`.
+
+## Commit attribution guard
+
+Two plain git hooks in `harness/git-hooks/` keep commits attributed to the human
+who owns the repo — for any assistant, not one vendor:
+
+- `commit-msg` strips `Co-Authored-By:`/`Generated with …`/robot-emoji attribution lines and says what it removed
+- `pre-commit` refuses a commit authored or committed under an assistant/bot identity, or with no email set
+
+Enable for one repo via `.git/hooks`, or for every repo with
+`git config --global core.hooksPath <clone>/harness/git-hooks`; setup.sh offers
+both. They chain to repo-local hooks, keep human co-authors, and leave prose
+that merely mentions these tools alone.
 
 ## CLI
 

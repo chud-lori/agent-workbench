@@ -13,6 +13,12 @@ Claude Code's built-in `/code-review` hunts correctness bugs. This one is
 opinionated about **shape**: is the code simpler than the problem allows, and
 does it match what this project already decided?
 
+**Read `rules.md` next to this file before reviewing.** It holds the numbered
+rules (CR-01 … CR-37) in three tiers — Gate / Justify / Lock — and, for each,
+the evidence that rule demands. Cite the id in every finding so the author can
+look the rule up and argue with it; an unnumbered opinion gives them nothing to
+push back on.
+
 ## 1. Load the project's memory first
 
 Generic review advice is worthless next to a recorded convention. Before
@@ -50,7 +56,11 @@ over-abstracted may have three callers you cannot see in the diff.
 
 ## 3. The six axes
 
-For each, the bar is a **specific, checkable claim** — not a smell.
+For each, the bar is a **specific, checkable claim** — not a smell. The rule
+ids in `rules.md` are grouped the same way: security CR-01…06, correctness and
+data CR-07…11, efficiency CR-12…16, overengineering CR-17…21, comment hygiene
+CR-22…26, readability and maintainability CR-27…34, plus the recorded-knowledge
+rules CR-35…37 that outrank all of them.
 
 **Comment noise.** Comments that restate the code (`// increment i`), commented-out
 code, stale comments contradicting the code beside them, docstrings repeating the
@@ -101,15 +111,33 @@ Every finding needs evidence someone can check:
 
 ## 5. Report
 
-One line per finding, worst first:
+One line per finding, worst first, each citing its rule:
 
 ```
-path:line — <axis> — what is wrong, under what condition. Fix: <the concrete change>.
+path:line — CR-14 — what is wrong, under what condition. Fix: <the concrete change>.
 ```
 
-Then a two-line verdict: what the change does, and whether it is safe to merge
-as-is / needs the listed fixes / needs rework. Cite `brain#id` wherever a
-recorded rule decided the call.
+Cite `brain#id` too wherever a recorded note decided the call (CR-35…37).
+
+Then close with an explicit gate — not a summary, a verdict:
+
+```
+Gate:    FAIL — CR-01, CR-07        (or: none)
+Justify: 2 open — CR-14, CR-17      (or: none)
+Lock:    3 open                     (or: none)
+Verdict: FAIL / PASS WITH FIXES / PASS
+```
+
+The verdict follows mechanically, so it cannot drift into diplomacy:
+
+- **FAIL** — any Gate-tier finding stands. Merging is wrong until it is fixed.
+- **PASS WITH FIXES** — no Gate findings, but Justify or Lock findings are open.
+  Name which must be resolved before merge and which are follow-ups.
+- **PASS** — nothing stands. Say it in one line and stop; do not manufacture a
+  finding to look thorough, and do not pad with praise.
+
+A review that reaches PASS honestly is more useful than one that reaches it
+with three invented nits.
 
 Say "no findings" plainly when that is true. Do not restate the diff, do not
 open with praise, and do not invent a finding per axis — most changes trip two
