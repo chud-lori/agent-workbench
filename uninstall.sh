@@ -61,6 +61,11 @@ for hook in commit-msg pre-commit; do
     info "unlinked git hook '$hook' from this repo."
   fi
 done
+AW_BIN="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/bin/aw"
+if [ -f "$AW_BIN" ]; then
+  rm "$AW_BIN"
+  info "removed CLI launcher $AW_BIN."
+fi
 if [ "$(git config --global core.hooksPath || true)" = "$WORKBENCH/harness/git-hooks" ]; then
   git config --global --unset core.hooksPath
   info "unset global core.hooksPath."

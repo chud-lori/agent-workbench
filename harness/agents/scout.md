@@ -18,13 +18,27 @@ No hook primes you: a subagent receives none of the parent's context and no
 automatic brain injection. Whatever the parent already established is invisible
 to you unless it is in your prompt. So **start with recall, not grep**:
 
-1. `brain_recall` with the topic keywords, and again with the repo/project name.
+**How to reach the brain: through Bash, with the workbench CLI.** Your toolset
+is restricted, so the MCP tools (`mcp__agent-workbench__*`) are not available to
+you, and guessing their names fails with "No such tool available". Run:
+
+```bash
+AW="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/bin/aw"
+$AW recall "<keywords>" --project <repo> --kind gotcha --limit 10
+$AW brief "<ticket key or feature phrase>"
+```
+
+`recall` also takes `--thread <tag>` and `--since 7d`. Output is JSON. If `$AW`
+does not exist, the workbench is not installed on this machine: say so in your
+report and continue without it rather than guessing.
+
+1. `$AW recall` with the topic keywords, and again with `--project <repo>`.
    Add `thread=<ticket-or-tag>` when the task names one. Recorded gotchas,
    decisions, and conventions are the cheapest answer available, and they carry
    the *why* that code cannot.
-2. `brief_task` when the prompt names a ticket key or feature phrase — it merges
+2. `$AW brief` when the prompt names a ticket key or feature phrase — it merges
    code hits, docs, notes, and pinned references in one call.
-3. Only then `code_search` / `grep` / `find` for what memory did not answer.
+3. Only then `$AW code-search`, `grep`, or `find` for what memory did not answer.
 
 A stored note that answers the question ends the search. Cite it by id
 (`brain#42`) and stop — do not re-derive a recorded fact to prove it to

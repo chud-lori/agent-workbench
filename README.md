@@ -125,7 +125,7 @@ Six skills under `harness/skills/` share one pattern: gather from every work sou
 
 ## Agent types (Claude Code)
 
-Subagents get no hooks and none of the parent's context, so brain recall has to live in their own system prompt. `harness/agents/` ships three types that do it, symlinked into `~/.claude/agents/`:
+Subagents get no hooks and none of the parent's context, so brain recall has to live in their own system prompt. They also run with a restricted toolset that holds no MCP tools, so they recall through Bash with the CLI launcher setup.sh installs at `~/.config/agent-workbench/bin/aw`. `harness/agents/` ships three types that do it, symlinked into `~/.claude/agents/`:
 
 - `scout` - read-only investigator; recalls notes before searching the filesystem, cites `path:line` and `brain#id`
 - `implementer` - implements against recorded decisions, gotchas, and preferences, matches surrounding style, verifies with the project's own checks

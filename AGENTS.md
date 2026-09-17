@@ -160,6 +160,14 @@ for a in "$WORKBENCH"/harness/agents/*.md; do ln -s "$a" ~/.claude/agents/"$(bas
 
 The parent's half of the job is a standing instruction: hand a subagent *evidence* (file:line, the snippet, `brain#id`), not conclusions it must re-derive.
 
+**They recall through Bash, not the MCP tools.** Each type runs with a restricted `tools:` allowlist, and that allowlist holds no `mcp__agent-workbench__*` tool — so an instruction to call `brain_recall` is an instruction to call a tool the agent does not have. The first version shipped exactly that: agents guessed a name (`agent-workbench__brain_recall`) and failed with "No such tool available". Listing an MCP tool in `tools:` is not a dependable fix either, since unknown allowlist names are dropped silently. So setup.sh installs a launcher at `~/.config/agent-workbench/bin/aw` (outside the clone, like the git hooks) and every agent type recalls with it:
+
+```bash
+"${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/bin/aw" recall "<keywords>" --project <repo> --kind gotcha
+```
+
+This also keeps agent prompts free of any machine-specific clone path. `tests/test_agent_types.py` fails if an agent is told to use a tool its allowlist lacks.
+
 **12. Transcript retention (Claude Code):** setup.sh sets `cleanupPeriodDays: 3650` in `~/.claude/settings.json` when unset. Claude Code otherwise prunes `~/.claude/projects` after **30 days**, silently deleting session history on a rolling basis. An existing value is left alone.
 
 **13. Install the commit attribution guard (any agent, any harness):** two plain git hooks in `harness/git-hooks/`, so the rule holds for *every* assistant that commits — and for humans — rather than depending on one vendor's instructions:
