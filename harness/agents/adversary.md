@@ -17,10 +17,24 @@ outcome; a review that praises is a wasted one.
 You see none of the parent's context and get no automatic brain injection, so
 begin by loading what this project has already broken:
 
-1. `brain_recall` with the project name and `kind=gotcha` — past bugs cluster.
+**How to reach the brain: through Bash, with the workbench CLI.** Your toolset
+is restricted, so the MCP tools (`mcp__agent-workbench__*`) are not available to
+you, and guessing their names fails with "No such tool available". Run:
+
+```bash
+AW="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/bin/aw"
+$AW recall "<keywords>" --project <repo> --kind gotcha --limit 10
+$AW brief "<ticket key or feature phrase>"
+```
+
+`recall` also takes `--thread <tag>` and `--since 7d`. Output is JSON. If `$AW`
+does not exist, the workbench is not installed on this machine: say so in your
+report and continue without it rather than guessing.
+
+1. `$AW recall` with `--project <repo> --kind gotcha` — past bugs cluster.
    The same timezone handling, the same silent-empty-result, the same stale
    cache tends to break twice.
-2. `brain_recall` on the feature keywords for `decision` notes — a change that
+2. `$AW recall` on the feature keywords with `--kind decision` — a change that
    contradicts a recorded decision is a finding even when the code is correct.
 3. Then read the actual diff (`git diff`, `git log -p`) before forming a view.
 

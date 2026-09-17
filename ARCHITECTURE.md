@@ -175,6 +175,10 @@ Two layers, with different guarantees:
   recalls before searching, `implementer` recalls conventions before editing,
   `adversary` recalls known failure modes before reviewing. There is no
   subagent-spawn hook point, so this is the only lever available.
+  Recall itself goes through Bash, via the launcher setup.sh installs at
+  `~/.config/agent-workbench/bin/aw`: an agent's `tools:` allowlist holds no MCP
+  tool, and unknown allowlist names are dropped silently, so the MCP path is not
+  reachable from a restricted agent.
 
 `setup.sh` also raises Claude Code's `cleanupPeriodDays` to 3650 when unset —
 the 30-day default silently prunes `~/.claude/projects` transcripts.
