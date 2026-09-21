@@ -58,8 +58,9 @@ efficiency claim without a number attached.
 | CR-19 | No layer that only forwards calls | the pass-through, and what it would look like removed |
 | CR-20 | Generality is paid for when needed, not in advance | the unused axis of flexibility |
 | CR-21 | The change is the smallest one that solves the stated problem | the parts of the diff the problem does not require |
+| CR-38 | No change to code the request does not require: no drive-by refactor, reformat, or comment tidy of adjacent code, and no deletion of pre-existing dead code (report it instead) | the changed line, and the absence of anything in the request that asks for it |
 
-Without the named alternative, CR-17 to CR-21 are opinions. State them as
+Without the named alternative, CR-17 to CR-21 and CR-38 are opinions. State them as
 questions instead.
 
 ## Comment hygiene — tier: Lock

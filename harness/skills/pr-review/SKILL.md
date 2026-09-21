@@ -14,7 +14,7 @@ opinionated about **shape**: is the code simpler than the problem allows, and
 does it match what this project already decided?
 
 **Read `rules.md` next to this file before reviewing.** It holds the numbered
-rules (CR-01 … CR-37) in three tiers — Gate / Justify / Lock — and, for each,
+rules (CR-01 … CR-38) in three tiers — Gate / Justify / Lock — and, for each,
 the evidence that rule demands. Cite the id in every finding so the author can
 look the rule up and argue with it; an unnumbered opinion gives them nothing to
 push back on.
@@ -58,7 +58,7 @@ over-abstracted may have three callers you cannot see in the diff.
 
 For each, the bar is a **specific, checkable claim** — not a smell. The rule
 ids in `rules.md` are grouped the same way: security CR-01…06, correctness and
-data CR-07…11, efficiency CR-12…16, overengineering CR-17…21, comment hygiene
+data CR-07…11, efficiency CR-12…16, overengineering CR-17…21 plus CR-38, comment hygiene
 CR-22…26, readability and maintainability CR-27…34, plus the recorded-knowledge
 rules CR-35…37 that outrank all of them.
 
