@@ -60,10 +60,26 @@ class StandingInstructionTests(unittest.TestCase):
     """The pre-coding rules must reach every harness, so they live in the
     shared block rather than in one vendor's config."""
 
-    def test_shared_block_covers_assumptions_scope_and_verification(self) -> None:
+    def test_shared_block_names_all_four_principles(self) -> None:
         text = (REPO / "harness" / "standing-instructions.md").read_text()
-        for needle in ("surface what you are assuming", "minimum that solves", "verify:"):
+        for needle in ("Think before coding", "Simplicity first", "Surgical changes", "Goal-driven execution"):
             self.assertIn(needle, text, f"standing instructions lost: {needle}")
+
+    def test_detailed_reference_covers_every_principle_with_a_check(self) -> None:
+        text = (REPO / "harness" / "coding-discipline.md").read_text()
+        for n, title in enumerate(
+            ("Think before coding", "Simplicity first", "Surgical changes", "Goal-driven execution"), start=1
+        ):
+            self.assertIn(f"## {n}. {title}", text, f"coding-discipline.md lost principle {n}")
+        # Each rule must end in something the agent can actually run or observe.
+        self.assertEqual(text.count("**Check before you"), 4, "every principle needs its own check")
+
+    def test_pointer_path_matches_what_setup_installs(self) -> None:
+        # A pointer to a path setup.sh does not write is worse than no pointer.
+        installed = "agent-workbench/coding-discipline.md"
+        self.assertIn(installed, (REPO / "setup.sh").read_text())
+        self.assertIn(installed, (REPO / "harness" / "standing-instructions.md").read_text())
+        self.assertIn(installed, (REPO / "uninstall.sh").read_text())
 
 
 if __name__ == "__main__":

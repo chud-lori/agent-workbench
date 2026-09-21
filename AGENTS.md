@@ -9,13 +9,13 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 
 ## Standing instructions (any harness, any repo)
 
-0. **Before you write code** — these are behavioural, not tool rules, and they apply to any agent in any harness:
-   - **Surface assumptions.** State what you are assuming rather than hiding it. When a request has two plausible readings, present both instead of silently picking one. If a simpler approach exists, say so and push back. If something is genuinely unclear, stop and name what is confusing: a wrong guess costs more than a question.
-   - **Write the minimum that solves the stated problem.** No unrequested features, no abstraction for a single use, no configurability nobody asked for, no error handling for impossible states.
-   - **Stay inside the request.** No drive-by refactors, reformatting, or "improvements" to adjacent code; report pre-existing dead code instead of deleting it; remove only the orphans your own change created. Every changed line should trace to something the user asked for.
-   - **Name the check, then loop.** For multi-step work state the plan as steps paired with their verification (`1. <step> -> verify: <check>`), and recast a vague task into a verifiable one ("fix the bug" -> "write a test that reproduces it, then make it pass"). A named success criterion lets you finish without asking; "make it work" does not.
+0. **Coding discipline** — four rules for *how* to change code, not which tool to use. They apply to any agent in any harness; the full version with examples and a check per rule is `harness/coding-discipline.md`, which setup.sh installs to `~/.config/agent-workbench/coding-discipline.md` so the standing instructions can point at a fixed path.
+   1. **Think before coding.** State the assumptions that matter. Present both readings of an ambiguous request rather than silently picking one. Push back once when a simpler path exists. Stop and name what is unclear instead of guessing — a question costs a minute, a wrong premise costs the review and the revert.
+   2. **Simplicity first.** Minimum code that solves the problem: no unrequested features, no abstraction for a single use, no configurability nobody asked for, no error handling for impossible states, no premature generality. 200 lines where 50 would do gets rewritten before it is shown.
+   3. **Surgical changes.** Touch only what the request requires — no drive-by refactors, reformatting, or comment tidying of adjacent code. Match the surrounding style even where you would differ. Mention pre-existing dead code; delete only the orphans your own change created. Every changed line should trace to something the human asked for.
+   4. **Goal-driven execution.** Recast the task as something checkable ("fix the bug" → "write a test that reproduces it, then make it pass"), state multi-step plans as `<step> → verify: <check>`, then run the checks and report what they actually printed. "Should work" is not a result, and neither is a green test you did not run.
 
-   `/pr-review` enforces the same ideas after the fact (CR-17…CR-21, CR-38, CR-34); this item is the authoring side.
+   The tradeoff is deliberate — caution over speed — so use judgment on trivial fixes. `/pr-review` enforces the same ideas after the fact, where they are numbered and citable: simplicity CR-17…CR-21, surgical scope CR-38 and CR-34, verification CR-11.
 
 1. **Task start**: for a nontrivial ticket/feature/bug, call `brief_task` with the ticket key or feature phrase first. It returns likely repos, code hits, doc hits, saved brain notes, and runnable repo commands in one call — use it before grepping manually.
 2. **Store durable knowledge**: when you learn something durable during work — schema quirks, deploy steps, API behaviors, tricky conventions, decisions made with the user — save it with `brain_remember`:

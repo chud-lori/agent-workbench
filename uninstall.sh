@@ -61,6 +61,11 @@ for hook in commit-msg pre-commit; do
     info "unlinked git hook '$hook' from this repo."
   fi
 done
+DISCIPLINE_DST="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/coding-discipline.md"
+if [ -f "$DISCIPLINE_DST" ]; then
+  rm "$DISCIPLINE_DST"
+  info "removed $DISCIPLINE_DST."
+fi
 AW_BIN="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/bin/aw"
 if [ -f "$AW_BIN" ]; then
   rm "$AW_BIN"
