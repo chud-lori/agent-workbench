@@ -209,6 +209,16 @@ fi
 # Agent types run with a restricted toolset and cannot reach the MCP tools, so
 # they recall through Bash instead. A fixed path outside the clone means an agent
 # prompt never has to know where the repo lives.
+RULES_SRC="$WORKBENCH/harness/skills/pr-review/rules.md"
+RULES_DST="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/review-rules.md"
+mkdir -p "$(dirname "$RULES_DST")"
+if cmp -s "$RULES_SRC" "$RULES_DST"; then
+  info "review-rules.md already current at $RULES_DST."
+else
+  cp "$RULES_SRC" "$RULES_DST"
+  info "installed review-rules.md at $RULES_DST (readable without loading the skill)."
+fi
+
 DISCIPLINE_SRC="$WORKBENCH/harness/coding-discipline.md"
 DISCIPLINE_DST="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/coding-discipline.md"
 mkdir -p "$(dirname "$DISCIPLINE_DST")"

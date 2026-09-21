@@ -73,6 +73,11 @@ for path in "$HOOKS_DIR" "$WORKBENCH/harness/git-hooks"; do
     info "unset global core.hooksPath."
   fi
 done
+RULES_DST="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/review-rules.md"
+if [ -f "$RULES_DST" ]; then
+  rm "$RULES_DST"
+  info "removed $RULES_DST."
+fi
 DISCIPLINE_DST="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/coding-discipline.md"
 if [ -f "$DISCIPLINE_DST" ]; then
   rm "$DISCIPLINE_DST"
