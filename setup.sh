@@ -209,6 +209,16 @@ fi
 # Agent types run with a restricted toolset and cannot reach the MCP tools, so
 # they recall through Bash instead. A fixed path outside the clone means an agent
 # prompt never has to know where the repo lives.
+DISCIPLINE_SRC="$WORKBENCH/harness/coding-discipline.md"
+DISCIPLINE_DST="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/coding-discipline.md"
+mkdir -p "$(dirname "$DISCIPLINE_DST")"
+if cmp -s "$DISCIPLINE_SRC" "$DISCIPLINE_DST"; then
+  info "coding-discipline.md already current at $DISCIPLINE_DST."
+else
+  cp "$DISCIPLINE_SRC" "$DISCIPLINE_DST"
+  info "installed coding-discipline.md at $DISCIPLINE_DST (the standing instructions point here)."
+fi
+
 AW_BIN="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/bin/aw"
 mkdir -p "$(dirname "$AW_BIN")"
 cat > "$AW_BIN.tmp" <<AWEOF
