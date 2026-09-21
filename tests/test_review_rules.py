@@ -74,12 +74,19 @@ class StandingInstructionTests(unittest.TestCase):
         # Each rule must end in something the agent can actually run or observe.
         self.assertEqual(text.count("**Check before you"), 4, "every principle needs its own check")
 
-    def test_pointer_path_matches_what_setup_installs(self) -> None:
+    def test_pointer_paths_match_what_setup_installs(self) -> None:
         # A pointer to a path setup.sh does not write is worse than no pointer.
-        installed = "agent-workbench/coding-discipline.md"
-        self.assertIn(installed, (REPO / "setup.sh").read_text())
-        self.assertIn(installed, (REPO / "harness" / "standing-instructions.md").read_text())
-        self.assertIn(installed, (REPO / "uninstall.sh").read_text())
+        for installed in ("agent-workbench/coding-discipline.md", "agent-workbench/review-rules.md"):
+            self.assertIn(installed, (REPO / "setup.sh").read_text(), installed)
+            self.assertIn(installed, (REPO / "harness" / "standing-instructions.md").read_text(), installed)
+            self.assertIn(installed, (REPO / "uninstall.sh").read_text(), installed)
+
+    def test_self_review_is_expected_without_invoking_the_skill(self) -> None:
+        # The rules existed only inside /pr-review, so nothing applied them to
+        # the agent's own diff unless a human asked for a review.
+        text = (REPO / "harness" / "standing-instructions.md").read_text()
+        self.assertIn("review your OWN diff", text.replace("Review your OWN", "review your OWN"))
+        self.assertIn("Gate tier", text)
 
 
 if __name__ == "__main__":
