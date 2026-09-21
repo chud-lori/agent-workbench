@@ -237,33 +237,42 @@ fi
 # assistant/bot identity. Harness-independent: plain git hooks, so it applies to
 # every agent (and every human) that commits in the repo, not just one vendor.
 step "Commit attribution guard"
+# Hooks are COPIED to a stable location outside any working tree, never
+# symlinked into it. A hook that lives in the repo it guards stops existing the
+# moment you check out a branch that predates it - and a dangling hook fails
+# silently, which is the worst way for a guardrail to fail.
 HOOKS_SRC="$WORKBENCH/harness/git-hooks"
-info "hooks: $HOOKS_SRC (commit-msg strips AI trailers, pre-commit blocks bot identities)"
-if ask "Install the commit guard for THIS repo (.git/hooks)?" "y"; then
-  for hook in commit-msg pre-commit; do
-    target="$WORKBENCH/.git/hooks/$hook"
-    if [ -L "$target" ] && [ "$(readlink "$target")" = "$HOOKS_SRC/$hook" ]; then
-      info "$hook already linked."
-    elif [ -e "$target" ]; then
-      info "$hook: $target exists and is not our symlink - left as is."
+HOOKS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/git-hooks"
+info "hooks: commit-msg strips AI trailers, pre-commit blocks bot identities"
+mkdir -p "$HOOKS_DIR"
+for hook in commit-msg pre-commit; do
+  if [ -f "$HOOKS_SRC/$hook" ]; then
+    if cmp -s "$HOOKS_SRC/$hook" "$HOOKS_DIR/$hook"; then
+      info "$hook already current in $HOOKS_DIR."
     else
-      mkdir -p "$WORKBENCH/.git/hooks"
-      ln -s "$HOOKS_SRC/$hook" "$target"
-      info "linked $hook into this repo."
+      cp "$HOOKS_SRC/$hook" "$HOOKS_DIR/$hook"
+      chmod +x "$HOOKS_DIR/$hook"
+      info "installed $hook into $HOOKS_DIR."
     fi
-  done
-fi
+  fi
+done
+info "re-run setup.sh after editing a hook - these are copies, not symlinks."
 # Machine-wide is the stronger option: core.hooksPath makes the guard apply to
 # EVERY repo. Our hooks chain to a repo-local hook of the same name afterwards,
 # so projects with their own hooks keep working.
 CURRENT_HOOKS_PATH="$(git config --global core.hooksPath || true)"
 if [ -z "$CURRENT_HOOKS_PATH" ]; then
-  if ask "Also apply the guard to EVERY repo on this machine (git core.hooksPath)?" "n"; then
-    git config --global core.hooksPath "$HOOKS_SRC"
-    info "set global core.hooksPath=$HOOKS_SRC (repo-local hooks still run, chained)."
+  if ask "Apply the guard to EVERY repo on this machine (git core.hooksPath)?" "y"; then
+    git config --global core.hooksPath "$HOOKS_DIR"
+    info "set global core.hooksPath=$HOOKS_DIR (repo-local hooks still run, chained)."
+  else
+    info "not enabled. Per-repo alternative: cp '$HOOKS_DIR'/* <repo>/.git/hooks/"
   fi
+elif [ "$CURRENT_HOOKS_PATH" = "$HOOKS_DIR" ]; then
+  info "global core.hooksPath already points at $HOOKS_DIR."
 elif [ "$CURRENT_HOOKS_PATH" = "$HOOKS_SRC" ]; then
-  info "global core.hooksPath already points here."
+  git config --global core.hooksPath "$HOOKS_DIR"
+  info "moved core.hooksPath off the working tree to $HOOKS_DIR (branch-independent)."
 else
   info "global core.hooksPath is set to $CURRENT_HOOKS_PATH - left as is."
 fi

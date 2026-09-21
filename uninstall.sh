@@ -54,11 +54,23 @@ for agent_file in "$WORKBENCH"/harness/agents/*.md; do
   fi
 done
 
+HOOKS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/git-hooks"
 for hook in commit-msg pre-commit; do
+  # Stale symlinks from before hooks were installed as copies.
   target="$WORKBENCH/.git/hooks/$hook"
   if [ -L "$target" ] && [ "$(readlink "$target")" = "$WORKBENCH/harness/git-hooks/$hook" ]; then
     rm "$target"
-    info "unlinked git hook '$hook' from this repo."
+    info "removed stale git-hook symlink '$hook' from this repo."
+  fi
+  if [ -f "$HOOKS_DIR/$hook" ]; then
+    rm "$HOOKS_DIR/$hook"
+    info "removed git hook '$hook' from $HOOKS_DIR."
+  fi
+done
+for path in "$HOOKS_DIR" "$WORKBENCH/harness/git-hooks"; do
+  if [ "$(git config --global core.hooksPath || true)" = "$path" ]; then
+    git config --global --unset core.hooksPath
+    info "unset global core.hooksPath."
   fi
 done
 DISCIPLINE_DST="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/coding-discipline.md"
@@ -70,10 +82,6 @@ AW_BIN="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/bin/aw"
 if [ -f "$AW_BIN" ]; then
   rm "$AW_BIN"
   info "removed CLI launcher $AW_BIN."
-fi
-if [ "$(git config --global core.hooksPath || true)" = "$WORKBENCH/harness/git-hooks" ]; then
-  git config --global --unset core.hooksPath
-  info "unset global core.hooksPath."
 fi
 if command -v claude >/dev/null 2>&1 && claude mcp get agent-workbench >/dev/null 2>&1; then
   claude mcp remove --scope user agent-workbench

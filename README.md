@@ -110,7 +110,7 @@ Two plain git hooks in `harness/git-hooks/` keep commits attributed to the human
 - `commit-msg` strips `Co-Authored-By:` and "Generated with" attribution lines (and robot-emoji trailers) from the message, and says what it removed
 - `pre-commit` refuses a commit authored or committed under an assistant or bot identity, or with no email set
 
-Enable them for one repo through `.git/hooks`, or for every repo with `git config --global core.hooksPath <clone>/harness/git-hooks`; `setup.sh` offers both. They chain to any repo-local hooks, keep real human co-authors, and leave prose that merely mentions these tools alone.
+`setup.sh` copies them to `~/.config/agent-workbench/git-hooks/` and points `core.hooksPath` there, so the guard covers every repo and survives any branch checkout. They are copies on purpose: a hook symlinked into the tree it guards vanishes the moment you check out a branch that predates it, and git treats a missing hook as no hook, so it fails without a word. Re-run `setup.sh` after editing one. They chain to any repo-local hooks, keep real human co-authors, and leave prose that merely mentions these tools alone.
 
 ## Skills (Claude Code)
 
