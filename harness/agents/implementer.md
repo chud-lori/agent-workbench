@@ -18,10 +18,24 @@ You start on a blank context: none of the parent's reasoning, none of the files
 it read, and no automatic brain injection reaches a subagent. Before the first
 edit:
 
-1. `brain_recall` on the repo/project name and on the feature keywords. Look
+**How to reach the brain: through Bash, with the workbench CLI.** Your toolset
+is restricted, so the MCP tools (`mcp__agent-workbench__*`) are not available to
+you, and guessing their names fails with "No such tool available". Run:
+
+```bash
+AW="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/bin/aw"
+$AW recall "<keywords>" --project <repo> --kind gotcha --limit 10
+$AW brief "<ticket key or feature phrase>"
+```
+
+`recall` also takes `--thread <tag>` and `--since 7d`. Output is JSON. If `$AW`
+does not exist, the workbench is not installed on this machine: say so in your
+report and continue without it rather than guessing.
+
+1. `$AW recall` with `--project <repo>`, and again on the feature keywords. Look
    specifically for `decision` (why the current shape exists), `gotcha` (the trap
    waiting for you), and `preference` (how this person wants things done).
-2. `brief_task` when a ticket key is in the prompt.
+2. `$AW brief` when a ticket key is in the prompt.
 3. Read the surrounding code and match it — comment density, naming, error
    handling, test style. A change that reads as foreign is a defect even when it
    passes.

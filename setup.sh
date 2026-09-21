@@ -205,6 +205,33 @@ if [ "$DO_CLAUDE" = "y" ] && [ ! -f "$WORKBENCH/.state/guard-patterns.txt" ]; th
   fi
 fi
 
+# --- CLI launcher (stable path for subagents and other harnesses) --------------
+# Agent types run with a restricted toolset and cannot reach the MCP tools, so
+# they recall through Bash instead. A fixed path outside the clone means an agent
+# prompt never has to know where the repo lives.
+DISCIPLINE_SRC="$WORKBENCH/harness/coding-discipline.md"
+DISCIPLINE_DST="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/coding-discipline.md"
+mkdir -p "$(dirname "$DISCIPLINE_DST")"
+if cmp -s "$DISCIPLINE_SRC" "$DISCIPLINE_DST"; then
+  info "coding-discipline.md already current at $DISCIPLINE_DST."
+else
+  cp "$DISCIPLINE_SRC" "$DISCIPLINE_DST"
+  info "installed coding-discipline.md at $DISCIPLINE_DST (the standing instructions point here)."
+fi
+
+AW_BIN="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/bin/aw"
+mkdir -p "$(dirname "$AW_BIN")"
+cat > "$AW_BIN.tmp" <<AWEOF
+#!/bin/sh
+exec python3 "$WORKBENCH/run_cli.py" "\$@"
+AWEOF
+chmod +x "$AW_BIN.tmp"
+if cmp -s "$AW_BIN.tmp" "$AW_BIN"; then
+  rm "$AW_BIN.tmp"; info "CLI launcher already current at $AW_BIN."
+else
+  mv "$AW_BIN.tmp" "$AW_BIN"; info "installed CLI launcher at $AW_BIN."
+fi
+
 # --- Commit attribution guard (git hooks) ---------------------------------------
 # Keeps AI attribution out of commit messages and refuses commits made under an
 # assistant/bot identity. Harness-independent: plain git hooks, so it applies to

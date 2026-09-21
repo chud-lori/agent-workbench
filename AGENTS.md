@@ -9,6 +9,14 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 
 ## Standing instructions (any harness, any repo)
 
+0. **Coding discipline** — four rules for *how* to change code, not which tool to use. They apply to any agent in any harness; the full version with examples and a check per rule is `harness/coding-discipline.md`, which setup.sh installs to `~/.config/agent-workbench/coding-discipline.md` so the standing instructions can point at a fixed path.
+   1. **Think before coding.** State the assumptions that matter. Present both readings of an ambiguous request rather than silently picking one. Push back once when a simpler path exists. Stop and name what is unclear instead of guessing — a question costs a minute, a wrong premise costs the review and the revert.
+   2. **Simplicity first.** Minimum code that solves the problem: no unrequested features, no abstraction for a single use, no configurability nobody asked for, no error handling for impossible states, no premature generality. 200 lines where 50 would do gets rewritten before it is shown.
+   3. **Surgical changes.** Touch only what the request requires — no drive-by refactors, reformatting, or comment tidying of adjacent code. Match the surrounding style even where you would differ. Mention pre-existing dead code; delete only the orphans your own change created. Every changed line should trace to something the human asked for.
+   4. **Goal-driven execution.** Recast the task as something checkable ("fix the bug" → "write a test that reproduces it, then make it pass"), state multi-step plans as `<step> → verify: <check>`, then run the checks and report what they actually printed. "Should work" is not a result, and neither is a green test you did not run.
+
+   The tradeoff is deliberate — caution over speed — so use judgment on trivial fixes. `/pr-review` enforces the same ideas after the fact, where they are numbered and citable: simplicity CR-17…CR-21, surgical scope CR-38 and CR-34, verification CR-11.
+
 1. **Task start**: for a nontrivial ticket/feature/bug, call `brief_task` with the ticket key or feature phrase first. It returns likely repos, code hits, doc hits, saved brain notes, and runnable repo commands in one call — use it before grepping manually.
 2. **Store durable knowledge**: when you learn something durable during work — schema quirks, deploy steps, API behaviors, tricky conventions, decisions made with the user — save it with `brain_remember`:
    - `kind`: `decision` | `fact` | `gotcha` | `preference` | `todo` | `note` | `reference`
@@ -136,7 +144,7 @@ Degrades cleanly: any missing source is skipped and called out, since a silently
 - `/postmortem` — reconstruct an incident from Slack + `recent_activity` + deploys + PRs + tickets into a timeline (cause introduced → detected → mitigated → resolved), a blameless five-whys, and a draft with owned action items. Ends by *proposing* one root-cause `gotcha` for the brain — approval-gated.
 - `/why` — code archaeology: climb blame → commit → PR → ticket → Slack → brain to answer "why does this code exist", with a cited evidence chain and an honest "no recorded reason survives" when the chain dead-ends.
 - `/meeting-prep` — one-page brief for the next calendar event: agenda + what changed since last occurrence + what you owe / are owed + likely topics, from calendar, Slack, Jira, PRs, and brain notes.
-- `/pr-review` — opinionated review of a GitHub PR, branch, or working diff: loads the project's recorded gotchas/decisions first (a change that walks back into a recorded trap is the highest-value finding), then checks comment noise, overengineering, security, algorithmic efficiency, simplicity, and maintainability. Every finding needs a concrete fix; an "overengineered" call must name the simpler alternative and an "inefficient" one must name the scale where it hurts. Posting to GitHub is approval-gated and never `--approve`s. Complements Claude Code's built-in `/code-review` (correctness bugs) rather than duplicating it. Findings cite numbered rules from `harness/skills/pr-review/rules.md` (CR-01…CR-37, tiered Gate / Justify / Lock, each naming the evidence it demands) and the review closes with a mechanical verdict — FAIL on any Gate finding, PASS WITH FIXES, or an honest PASS. CR-35…37 make a recorded gotcha, decision, or preference outrank any generic review opinion.
+- `/pr-review` — opinionated review of a GitHub PR, branch, or working diff: loads the project's recorded gotchas/decisions first (a change that walks back into a recorded trap is the highest-value finding), then checks comment noise, overengineering, security, algorithmic efficiency, simplicity, and maintainability. Every finding needs a concrete fix; an "overengineered" call must name the simpler alternative and an "inefficient" one must name the scale where it hurts. Posting to GitHub is approval-gated and never `--approve`s. Complements Claude Code's built-in `/code-review` (correctness bugs) rather than duplicating it. Findings cite numbered rules from `harness/skills/pr-review/rules.md` (CR-01…CR-38, tiered Gate / Justify / Lock, each naming the evidence it demands) and the review closes with a mechanical verdict — FAIL on any Gate finding, PASS WITH FIXES, or an honest PASS. CR-35…37 make a recorded gotcha, decision, or preference outrank any generic review opinion.
 
 setup.sh symlinks every directory under `harness/skills/`, so these install with the rest; manually:
 
@@ -159,6 +167,14 @@ for a in "$WORKBENCH"/harness/agents/*.md; do ln -s "$a" ~/.claude/agents/"$(bas
 ```
 
 The parent's half of the job is a standing instruction: hand a subagent *evidence* (file:line, the snippet, `brain#id`), not conclusions it must re-derive.
+
+**They recall through Bash, not the MCP tools.** Each type runs with a restricted `tools:` allowlist, and that allowlist holds no `mcp__agent-workbench__*` tool — so an instruction to call `brain_recall` is an instruction to call a tool the agent does not have. The first version shipped exactly that: agents guessed a name (`agent-workbench__brain_recall`) and failed with "No such tool available". Listing an MCP tool in `tools:` is not a dependable fix either, since unknown allowlist names are dropped silently. So setup.sh installs a launcher at `~/.config/agent-workbench/bin/aw` (outside the clone, like the git hooks) and every agent type recalls with it:
+
+```bash
+"${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/bin/aw" recall "<keywords>" --project <repo> --kind gotcha
+```
+
+This also keeps agent prompts free of any machine-specific clone path. `tests/test_agent_types.py` fails if an agent is told to use a tool its allowlist lacks.
 
 **12. Transcript retention (Claude Code):** setup.sh sets `cleanupPeriodDays: 3650` in `~/.claude/settings.json` when unset. Claude Code otherwise prunes `~/.claude/projects` after **30 days**, silently deleting session history on a rolling basis. An existing value is left alone.
 

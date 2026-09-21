@@ -73,6 +73,16 @@ for path in "$HOOKS_DIR" "$WORKBENCH/harness/git-hooks"; do
     info "unset global core.hooksPath."
   fi
 done
+DISCIPLINE_DST="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/coding-discipline.md"
+if [ -f "$DISCIPLINE_DST" ]; then
+  rm "$DISCIPLINE_DST"
+  info "removed $DISCIPLINE_DST."
+fi
+AW_BIN="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/bin/aw"
+if [ -f "$AW_BIN" ]; then
+  rm "$AW_BIN"
+  info "removed CLI launcher $AW_BIN."
+fi
 if command -v claude >/dev/null 2>&1 && claude mcp get agent-workbench >/dev/null 2>&1; then
   claude mcp remove --scope user agent-workbench
   info "unregistered MCP 'agent-workbench' from Claude Code."
