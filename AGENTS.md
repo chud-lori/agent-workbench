@@ -200,6 +200,20 @@ cp "$HOOKS_DIR"/* <repo>/.git/hooks/
 
 Why it exists: an AI trailer that reaches GitHub attaches a bot account to the repository's contributor graph, and that cache persists long after the trailer is scrubbed. `git commit --no-verify` still bypasses the hooks by design — this is a guardrail against automation, not a lock against the repo owner. Human co-authors and prose that merely mentions these tools are deliberately left alone (`tests/test_commit_guard.py`).
 
+## Machine-local instructions (third-party plugins)
+
+The marker-fenced block in each harness's global instruction file is **shared**: it is this repo's content, it is refreshed in place on every `setup.sh` run, and it reaches anyone who clones the repo. Anything that depends on software only *you* installed does not belong there — it would break for everyone else, and a refresh would overwrite a hand-edit anyway.
+
+Write it **below** the `<!-- agent-workbench:end -->` marker instead, under a heading like `# Machine notes`. setup.sh never touches anything outside the fences.
+
+The case that keeps coming up is a **quality or house-style plugin whose rules ship as skills**. Enabling such a plugin does nothing on its own: skills load on demand, so unless a session invokes one, the rules sit unread on disk and output is unaffected. To actually apply it, the machine-local note should say three things:
+
+1. **Which skill**, by name, and **when to load it** — "before finishing a change that touches code comments" is actionable; "follow the style guide" is not.
+2. **Which rules win** where the plugin overlaps the `/pr-review` rules in `harness/skills/pr-review/rules.md`. Two rule sets that quietly disagree are worse than one: decide the precedence and write it down.
+3. That it is **instruction-based**, not enforced. A note makes the skill likely to load, not guaranteed. A hook cannot substitute here, because it cannot tell from the tool call alone whether the change touched the thing the plugin governs.
+
+To check whether a plugin is actually shaping your output, grep your instruction files for its skill names. No reference means nothing is cueing it, however enabled it looks in `settings.json`.
+
 ## Measuring the brain (blind replay)
 
 To prove (or debug) the memory's value, replay a task the team already finished: check out the repo pinned to just before the real fix (single branch, no remote), give the same prompt to the same model twice — once with the workbench MCP/hooks disabled, once enabled — and score both against the shipped fix and your conventions (correctness, rules followed, tool calls, tokens, wall time). Run it blind (no session memory of the original work). This also audits the brain itself: a replay that contradicts a stored note means the note needs `brain_amend`.
