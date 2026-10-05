@@ -36,7 +36,7 @@ cd agent-workbench
 ./setup.sh
 ```
 
-`setup.sh` detects your harnesses (Claude Code / Codex / Gemini CLI), registers the MCP server, installs the standing instructions in a marker-fenced block so re-runs refresh in place, wires the four Claude Code hooks, links the skills and agent types, raises Claude Code's transcript retention off its 30-day default, and builds the code index. It is idempotent, so re-run it anytime. `./uninstall.sh` reverses all of it but never touches `.state/`, so the brain and the index survive.
+`setup.sh` detects your harnesses (Claude Code / Codex / Gemini CLI), registers the MCP server, installs the standing instructions in a marker-fenced block so re-runs refresh in place, wires the four Claude Code hooks, links the skills and agent types, raises Claude Code's transcript retention off its 30-day default, offers optional third-party skills and plugins from upstream rather than vendoring them, and builds the code index. It is idempotent, so re-run it anytime. `./uninstall.sh` reverses all of it but never touches `.state/`, so the brain and the index survive.
 
 `setup.sh` is a bash script that writes symlinks, so it targets a Unix shell. Manual per-harness steps are in [AGENTS.md → Harness setup](AGENTS.md).
 
