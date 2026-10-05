@@ -47,6 +47,10 @@ gh pr view <n> --json files --jq '.files[].path'
 Branch or local work instead: `git diff <base>...HEAD`, or `git diff` for
 uncommitted. A pasted PR URL gives you the number.
 
+If `gh` is absent or unauthenticated, review the local diff instead and **say so
+in the verdict** — a review of a branch is not a review of the PR, and silence
+about which one you read lets the reader assume the wrong thing.
+
 **Review the diff, not the repo.** Pre-existing problems in untouched code are
 out of scope unless the change makes them worse — say so explicitly if you
 mention one at all.

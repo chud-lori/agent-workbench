@@ -214,6 +214,19 @@ The case that keeps coming up is a **quality or house-style plugin whose rules s
 
 To check whether a plugin is actually shaping your output, grep your instruction files for its skill names. No reference means nothing is cueing it, however enabled it looks in `settings.json`.
 
+## What setup.sh cannot install for you
+
+The MCP server, the hooks, the skills and the agent types install from this repo. Everything the *skills* then reach for comes from outside it, and a missing one rarely announces itself: the skill runs, returns a thinner answer, and nothing says a source was absent. setup.sh therefore ends with a **Prerequisites** report — informational only, since a missing optional tool is not a broken setup:
+
+| Tool | Needed by | Without it |
+|---|---|---|
+| `git` | `recent_activity`, `repo_state`, the commit guard | those return nothing useful; everything else still works |
+| `gh` (authenticated) | the PR half of `/standup`, `/brain-harvest`, `/postmortem`, `/why`, `/pr-review` | PR lookups return nothing. **An installed but unauthenticated `gh` is the quiet case**, so setup.sh runs `gh auth status` rather than just checking the binary |
+| `node` ≥ 18 | the companion plugins and skills offered at setup | those offers are skipped |
+| Slack / Atlassian / calendar MCPs | the non-git sources in the evidence skills | that source is skipped |
+
+**Every skill that reaches for one of these must say so when it is missing.** A silently absent source reads as "nothing happened there", which is the failure the whole evidence pattern exists to avoid. `tests/test_skill_contract.py` enforces it: a skill that calls an external tool without documenting the degraded path fails the suite, as does a `setup.sh` that stops reporting these.
+
 ## Measuring the brain (blind replay)
 
 To prove (or debug) the memory's value, replay a task the team already finished: check out the repo pinned to just before the real fix (single branch, no remote), give the same prompt to the same model twice — once with the workbench MCP/hooks disabled, once enabled — and score both against the shipped fix and your conventions (correctness, rules followed, tool calls, tokens, wall time). Run it blind (no session memory of the original work). This also audits the brain itself: a replay that contradicts a stored note means the note needs `brain_amend`.
