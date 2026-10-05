@@ -96,7 +96,7 @@ errors (`except: pass`), missing handling for a failure the code can actually
 hit, magic values without a name, behaviour changes with no test where the
 project does test.
 
-## 4. Verify before reporting
+## 4. Try to disprove each finding, then verify
 
 Every finding needs evidence someone can check:
 
@@ -109,6 +109,14 @@ Every finding needs evidence someone can check:
 - Skip formatting, import order, and anything a linter owns — unless it changes
   behaviour.
 
+**Attack your own candidate before you report it.** Ask what would have to be
+true for the finding to be wrong, then go looking for exactly that: the caller
+that already validates the input, the config that bounds the loop, the test that
+covers the path. A finding that survives a real attempt to kill it is worth
+reporting; one you never tried to kill is a guess with a rule number attached.
+Record what you tried — "checked all three call sites, none sanitises" is the
+part a reader can disagree with.
+
 ## 5. Report
 
 One line per finding, worst first, each citing its rule:
@@ -118,6 +126,25 @@ path:line — CR-14 — what is wrong, under what condition. Fix: <the concrete 
 ```
 
 Cite `brain#id` too wherever a recorded note decided the call (CR-35…37).
+
+For a review of any size, also write the findings as records and check them:
+
+```bash
+python3 <skill dir>/validate_findings.py findings.json
+```
+
+Each record takes a `verdict` and the fields that verdict has to support:
+
+| verdict | means | required |
+|---|---|---|
+| `confirmed` | it stands, with a trace | `rule`, `path`, `line`, `failure`, `fix` |
+| `needs_validation` | one fact would settle it | `rule`, `path`, `unresolved` — and **no severity** |
+| `rejected` | you disproved it | `rule`, `path`, `disproved_by` |
+
+The validator fails on a missing field, an unknown rule id, or a severity on an
+unresolved record. It exists because `rules.md` only *says* each rule names its
+evidence, and a check nothing runs is a check that decays. `[]` is a valid
+findings file and the honest output of a clean review.
 
 Then close with an explicit gate — not a summary, a verdict:
 
@@ -138,6 +165,11 @@ The verdict follows mechanically, so it cannot drift into diplomacy:
 
 A review that reaches PASS honestly is more useful than one that reaches it
 with three invented nits.
+
+End with one line of coverage: what you examined, and what you did **not**.
+"Read the three changed handlers; did not exercise the migration path" tells the
+reader where the review stops. A verdict with no stated edge implies you looked
+everywhere, which is rarely true.
 
 Say "no findings" plainly when that is true. Do not restate the diff, do not
 open with praise, and do not invent a finding per axis — most changes trip two
