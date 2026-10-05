@@ -291,8 +291,17 @@ if [ "$DO_CLAUDE" = "y" ]; then
       (cd "$HOME" && curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash) \
         && info "caveman installed." || info "caveman install failed - re-run its installer manually."
     fi
+    if ask "Install the security-audit skill (multi-phase codebase audit, github.com/cloudflare/security-audit-skill)?" "n"; then
+      # Installs to ~/.agents/skills (the skills CLI's own universal dir) and
+      # symlinks into ~/.claude/skills. One target may report that it does not
+      # support global installs; the rest still succeed.
+      (cd "$HOME" && npx -y skills add https://github.com/cloudflare/security-audit-skill \
+         --skill security-audit --global --yes) \
+        && info "security-audit installed (run /security-audit)." \
+        || info "security-audit install failed - re-run its installer manually."
+    fi
   else
-    info "node >=18 not found - skipping companion plugin offers (caveman needs it)."
+    info "node >=18 not found - skipping companion plugin offers (caveman and security-audit need it)."
   fi
   info "ponytail (minimalist code generation) installs from inside Claude Code - two separate prompts:"
   info "  /plugin marketplace add DietrichGebert/ponytail"
