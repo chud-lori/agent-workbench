@@ -299,6 +299,37 @@ if [ "$DO_CLAUDE" = "y" ]; then
   info "  /plugin install ponytail@ponytail"
 fi
 
+# --- Prerequisites report -------------------------------------------------------
+# Everything above installs cleanly without these, and every skill degrades when
+# one is absent - but it degrades at 9am inside a task, not here. Report once,
+# plainly, and never fail: a missing optional tool is not a broken setup.
+step "Prerequisites"
+report_tool() {
+  # report_tool <binary> <required|optional> <what stops working without it>
+  if command -v "$1" >/dev/null 2>&1; then
+    info "$1: present"
+  elif [ "$2" = "required" ]; then
+    info "$1: MISSING - $3"
+  else
+    info "$1: not found (optional) - $3"
+  fi
+}
+report_tool git required "recent_activity, repo_state, and the commit guard all shell out to git"
+report_tool gh optional "the PR half of /standup, /brain-harvest, /postmortem, /why and /pr-review"
+report_tool node optional "the companion plugins and skills offered above"
+if command -v gh >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1; then
+  info "gh: installed but not authenticated - run 'gh auth login' or its PR lookups return nothing"
+fi
+if [ "$DO_CLAUDE" = "y" ] && command -v claude >/dev/null 2>&1; then
+  for connector in slack atlassian google_workspace_local; do
+    if claude mcp get "$connector" >/dev/null 2>&1; then
+      info "$connector MCP: registered"
+    else
+      info "$connector MCP: absent (optional) - skills that read it will say so and continue"
+    fi
+  done
+fi
+
 # --- Code index ------------------------------------------------------------------
 step "Code index"
 info "index roots: \${AGENT_WORKBENCH_REPO_ROOT:-~/repo} (override via env before re-running)"
