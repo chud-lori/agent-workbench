@@ -227,6 +227,20 @@ The MCP server, the hooks, the skills and the agent types install from this repo
 
 **Every skill that reaches for one of these must say so when it is missing.** A silently absent source reads as "nothing happened there", which is the failure the whole evidence pattern exists to avoid. `tests/test_skill_contract.py` enforces it: a skill that calls an external tool without documenting the degraded path fails the suite, as does a `setup.sh` that stops reporting these.
 
+## Moving to a new machine
+
+`setup.sh` reinstalls everything this repo owns. Three things it cannot reinstall, because they are not in the repo:
+
+**1. The brain.** `.state/` is gitignored, so a fresh clone starts empty — correct for a new user, wrong for a returning one, and indistinguishable from the installer's side. Copy `.state/brain.sqlite` from the old machine before storing anything, or the first note you write becomes the entire history. `brain_export` writes a markdown copy as a second line of defence; the index needs no backup, since `rebuild_code_index` recreates it.
+
+Treat both as private. The brain accumulates hostnames, channel names and ticket keys from real work, so it does not belong in a public dotfiles repo or any shared drive you would not put an internal wiki in.
+
+**2. Machine-local instructions.** Everything you wrote below the `<!-- agent-workbench:end -->` marker is personal and, by design, not in this repo. Keep a copy somewhere that travels — a `kind=reference` brain note works well, since the brain is already the thing you carry, and it keeps the copy in the same place you will be looking after a restore. Re-paste the block under the marker after running setup.sh.
+
+**3. Third-party plugins and skills.** The companion step offers them, but each installs from its own upstream and brings no settings with it. Anything that tells an agent *when* to use one is machine-local instruction, so it moves with (2), not with the install.
+
+A migration is therefore: clone, restore `.state/brain.sqlite`, `./setup.sh`, re-paste the machine-local block, accept the companion offers. Then check the Prerequisites report for the tools the installer cannot provide.
+
 ## Measuring the brain (blind replay)
 
 To prove (or debug) the memory's value, replay a task the team already finished: check out the repo pinned to just before the real fix (single branch, no remote), give the same prompt to the same model twice — once with the workbench MCP/hooks disabled, once enabled — and score both against the shipped fix and your conventions (correctness, rules followed, tool calls, tokens, wall time). Run it blind (no session memory of the original work). This also audits the brain itself: a replay that contradicts a stored note means the note needs `brain_amend`.

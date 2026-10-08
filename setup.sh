@@ -312,6 +312,15 @@ fi
 # Everything above installs cleanly without these, and every skill degrades when
 # one is absent - but it degrades at 9am inside a task, not here. Report once,
 # plainly, and never fail: a missing optional tool is not a broken setup.
+# A fresh clone starts with an empty brain. That is correct for a new user and
+# wrong for a returning one, and the two look identical from here - so say it.
+if [ ! -s "${AGENT_WORKBENCH_STATE_DIR:-$WORKBENCH/.state}/brain.sqlite" ]; then
+  step "Brain"
+  info "no brain yet at ${AGENT_WORKBENCH_STATE_DIR:-$WORKBENCH/.state}/brain.sqlite - starting empty."
+  info "moving from another machine? copy its .state/brain.sqlite here before using the brain,"
+  info "or the first note you store becomes the whole history. See AGENTS.md > Moving to a new machine."
+fi
+
 step "Prerequisites"
 report_tool() {
   # report_tool <binary> <required|optional> <what stops working without it>
