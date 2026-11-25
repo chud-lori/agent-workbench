@@ -49,6 +49,28 @@ class SkillContractTests(unittest.TestCase):
                     "when it is missing, so the user gets a thin answer with no warning",
                 )
 
+    def test_voice_stores_through_the_rule_engine_rather_than_its_own_profile(self) -> None:
+        """The decision that kept /voice from duplicating the rule engine.
+
+        Voice is one context (audience:<person>), so a voice pattern is an
+        ordinary contextual rule. A separate profile note would reimplement
+        scoped storage, correction-learning and retrieval a second time, and the
+        two copies would drift.
+        """
+        text = (REPO / "harness" / "skills" / "voice" / "SKILL.md").read_text()
+        for tool in ("brain_rule_remember", "brain_rules_in_force", "brain_context"):
+            self.assertIn(tool, text, f"voice does not reach the rule engine via {tool}")
+        self.assertNotIn(
+            "brain_voice_profile",
+            text,
+            "voice reintroduced a store of its own; audience-scoped rules are the profile",
+        )
+
+    def test_voice_refuses_to_store_raw_messages_or_slack_ids(self) -> None:
+        text = (REPO / "harness" / "skills" / "voice" / "SKILL.md").read_text()
+        self.assertRegex(text, r"[Nn]o raw message bodies")
+        self.assertRegex(text, r"U0", "voice must say that Slack ids are resolved to names, not stored")
+
     def test_setup_reports_the_prerequisites_it_cannot_install(self) -> None:
         setup = (REPO / "setup.sh").read_text()
         for tool in ("git", "gh", "node"):
