@@ -201,6 +201,88 @@ class ContextualRuleTests(unittest.TestCase):
             self.assertEqual([r["statement"] for r in teammate], ["write it in casual indonesian"])
             self.assertEqual([r["statement"] for r in client], ["write it in formal english"])
 
+    def test_a_rule_stored_before_the_index_existed_is_backfilled(self) -> None:
+        # An existing brain must adopt the indexed lookup without a migration
+        # step the user has to run.
+        import sqlite3
+        import time
+
+        from agent_workbench import brain
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            conn = brain._connect(config)
+            try:
+                conn.execute(rules.RULES_SCHEMA)
+                conn.execute(
+                    "insert into rules(statement,scope,trigger,created_at) values (?,?,?,?)",
+                    ("legacy rule", "repo:svc audience:qa", "handoff", int(time.time())),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            held = rules.rules_in_force(context=["repo:svc", "audience:qa"], config=config)["rules"]
+            self.assertEqual([rule["statement"] for rule in held], ["legacy rule"])
+            self.assertEqual(rules.rules_in_force(context=["repo:svc"], config=config)["rules"], [])
+
+    def test_amending_a_rule_reindexes_its_trigger(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            rules.remember_rule("use the full id", scope=["audience:qa"], config=config)
+            rules.remember_rule("use the full id always", scope=["audience:qa"], trigger=["runbook"], config=config)
+            held = rules.rules_in_force(prompt="write the runbook", config=config)["rules"]
+            self.assertEqual(len(held), 1)
+            self.assertEqual(held[0]["matched_by"], "trigger")
+
+    def test_a_retired_rule_leaves_no_index_rows_behind(self) -> None:
+        from agent_workbench import brain
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            stored = rules.remember_rule("obsolete", scope=["repo:a"], trigger=["x"], config=config)
+            rules.rule_feedback(stored["id"], "retire", config=config)
+            conn = brain._connect(config)
+            try:
+                for table in ("rule_scope", "rule_trigger"):
+                    rows = conn.execute(f"select 1 from {table} where rule_id=?", (stored["id"],)).fetchall()
+                    self.assertEqual(rows, [], f"{table} kept a row for a retired rule")
+            finally:
+                conn.close()
+
+    def test_the_lookup_is_driven_off_an_index_not_a_table_scan(self) -> None:
+        """The hot path: the UserPromptSubmit hook runs this on every turn.
+
+        Asserting the plan rather than a timing, because a timing test on 200
+        rows proves nothing and fails on a loaded machine.
+        """
+        from agent_workbench import brain
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            rules.remember_rule("global one", config=config)
+            rules.remember_rule("scoped one", scope=["repo:svc", "audience:qa"], config=config)
+            for index in range(50):
+                rules.remember_rule(f"noise {index}", scope=[f"repo:other{index}"], config=config)
+            conn = brain._connect(config)
+            try:
+                rules._ensure_tables(conn)
+                sql, params = rules._candidate_sql(["audience:qa", "repo:svc"], [])
+                plan = [row[3] for row in conn.execute(f"explain query plan {sql}", params)]
+            finally:
+                conn.close()
+            self.assertFalse(
+                [step for step in plan if step.startswith("SCAN rules")],
+                f"the candidate lookup scans every rule: {plan}",
+            )
+
+    def test_a_partial_context_returns_only_the_global_rule(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            rules.remember_rule("holds everywhere", config=config)
+            rules.remember_rule("needs both keys", scope=["repo:svc", "audience:qa"], config=config)
+            held = rules.rules_in_force(context=["repo:svc"], config=config)["rules"]
+            self.assertEqual([rule["statement"] for rule in held], ["holds everywhere"])
+
     def test_a_trigger_word_surfaces_a_rule_whose_context_is_not_declared(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)

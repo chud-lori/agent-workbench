@@ -49,11 +49,11 @@ def remember(
         if duplicate:
             return {"id": duplicate[0], "stored": False, "warning": "identical note already exists"}
         similar = _find_similar(conn, content, project, tags)
-        cursor = conn.execute(
-            "insert into notes(content,kind,project,tags,created_at) values(?,?,?,?,?)",
-            (content, kind, project, " ".join(tags or []), int(time.time())),
+        new_id = _next_note_id(conn)
+        conn.execute(
+            "insert into notes(rowid,content,kind,project,tags,created_at) values(?,?,?,?,?,?)",
+            (new_id, content, kind, project, " ".join(tags or []), int(time.time())),
         )
-        new_id = cursor.lastrowid
         superseded: list[int] = []
         for old_id in supersedes or []:
             if old_id == new_id:
@@ -358,9 +358,7 @@ def forget(note_id: int, config: WorkbenchConfig | None = None) -> dict[str, Any
     conn = _connect(config)
     try:
         cursor = conn.execute("delete from notes where rowid=?", (note_id,))
-        # FTS5 reuses a freed rowid, so a surviving stats row would hand the
-        # deleted note's recall count to whatever note is stored next.
-        conn.execute("delete from note_stats where note_id=?", (note_id,))
+        _purge_note(conn, note_id)
         conn.commit()
         return {"id": note_id, "deleted": cursor.rowcount > 0}
     finally:
@@ -423,6 +421,21 @@ def export(path: str | None = None, config: WorkbenchConfig | None = None) -> di
     return result
 
 
+# SQLite reuses a rowid freed by deleting the highest row, and FTS5 is no
+# exception. A note id is cited by hand all over the brain ("brain#42") and by
+# every side table, so reissuing one silently rebinds those references to a
+# different note. This table is the high-water mark; ids only ever go up.
+SEQ_SCHEMA = """
+        create table if not exists note_seq(
+            id integer primary key check (id = 1),
+            next_id integer not null
+        )
+"""
+
+# Every table keyed on a note id. forget() clears all of them, and
+# tests/test_brain_identity.py fails if a new one is added without being listed.
+NOTE_KEYED_TABLES = ("note_stats",)
+
 STATS_SCHEMA = """
         create table if not exists note_stats(
             note_id integer primary key,
@@ -457,6 +470,7 @@ def _connect(config: WorkbenchConfig) -> sqlite3.Connection:
     else:
         conn.execute(NOTES_SCHEMA.format(name="notes"))
     conn.execute(STATS_SCHEMA)
+    conn.execute(SEQ_SCHEMA)
     return conn
 
 
@@ -478,6 +492,37 @@ def _migrate(conn: sqlite3.Connection) -> None:
     except Exception:
         conn.execute("rollback")
         raise
+
+
+def _next_note_id(conn: sqlite3.Connection) -> int:
+    """The next id, from a high-water mark that never goes backwards.
+
+    Seeded from the current maximum on first use, so an existing brain adopts
+    this without a migration: ids keep counting from where they left off.
+    """
+    row = conn.execute("select next_id from note_seq where id=1").fetchone()
+    if row is None:
+        highest = conn.execute("select coalesce(max(rowid), 0) from notes").fetchone()[0]
+        next_id = highest + 1
+        conn.execute("insert into note_seq(id, next_id) values (1, ?)", (next_id,))
+    else:
+        next_id = row[0]
+        highest = conn.execute("select coalesce(max(rowid), 0) from notes").fetchone()[0]
+        # A brain written before this existed can hold ids above the mark.
+        next_id = max(next_id, highest + 1)
+    conn.execute("update note_seq set next_id=? where id=1", (next_id + 1,))
+    return next_id
+
+
+def _purge_note(conn: sqlite3.Connection, note_id: int) -> None:
+    """Clear every table keyed on this note id.
+
+    One place to change when a table is added, instead of a delete statement
+    each caller has to remember. Monotonic ids already stop a reissue, so this
+    is about not carrying dead rows forever.
+    """
+    for table in NOTE_KEYED_TABLES:
+        conn.execute(f"delete from {table} where note_id=?", (note_id,))
 
 
 def _record_recall(conn: sqlite3.Connection, note_ids: list[int]) -> None:

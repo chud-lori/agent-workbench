@@ -44,6 +44,7 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 | `brain_rule_remember` / `brain_rules_in_force` | contextual **rules** — how to behave in a context, learned from a correction. Retrieved by scope match, never text similarity |
 | `brain_rule_feedback` / `brain_context` | record that a surfaced rule failed or retire it; view one context's rules plus health flags (never surfaced, keeps being corrected) |
 | recall telemetry | every `brain_recall` hit increments that note's `recall_count` and stamps `last_recalled_at`. A rehearsed note then outranks an equally-matching note nobody has opened. Counters appear in recall output only once non-zero, and never reorder a date-ordered listing |
+| note ids | monotonic and never reissued. SQLite frees the rowid of the highest row on delete, and a note id is a reference — cited by hand as `brain#42` and by every side table — so a reused id rebinds those silently. `brain.NOTE_KEYED_TABLES` lists every table `forget()` must clear, and a test fails if a table keys on `note_id` without being listed |
 | `brain_promote` | append a proven note to a shared, git-versioned markdown reference (team playbook); stamps the note so it promotes once |
 | `brain_resolve` | mark a todo/note resolved (hidden from default recall; `include_resolved` shows it) |
 | `brain_export` | dump all brain notes to markdown (backup) |
@@ -204,6 +205,8 @@ Rules live in their own table in `brain.sqlite` and are retrieved by **scope mat
 - `brain_rule_remember` — statement, the user's reason, one real example, and the narrowest scope that explains the correction: `repo:x`, `workstream:y`, `task:z`, `audience:qa`, `channel:c`. A rule restating one already in the same scope sharpens it rather than stacking a near-duplicate.
 - `brain_rules_in_force` — the rules governing the active context, most specific first. A rule applies when **every** key in its scope is active, which is also the inheritance mechanism: declare `repo:svc` and `workstream:runtime-upgrade` together and you inherit the rules of each, with no parent pointers. Ties fall to the key type, ordered `repo` > `workstream` > `task` > `audience` > `channel`, then to the newest rule.
 - `brain_rule_feedback` / `brain_context` — a rule corrected twice after being shown is wrong; one `brain_context` reports as never surfaced is scoped to keys that never co-occur. Neither is visible unless the failure is recorded.
+
+Scope and trigger are stored on the rule as text, because that is what a human reads back, and mirrored into `rule_scope` / `rule_trigger` for lookup. The candidate query is driven off those indexes rather than scanning the table, since `prompt-recall.sh` runs it on **every** turn; `tests/test_rules.py` asserts the query plan contains no `SCAN rules`. A global rule carries a `@global` sentinel key so even that branch is indexed, and a brain written before the index tables existed backfills itself on first use rather than needing a migration step.
 
 **Conflicts are reported, not hidden.** Two equally-specific rules whose statements overlap come back as `conflicts`, and the standing instructions say to follow the first and name it. Two equally-specific rules that say unrelated things are not a conflict, they are two rules.
 
