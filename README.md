@@ -48,9 +48,9 @@ Environment variables with defaults. Nothing is hardcoded to a particular machin
 |---|---|---|
 | `AGENT_WORKBENCH_REPO_ROOT` | `~/repo` | Where your work repos live |
 | `AGENT_WORKBENCH_INDEX_ROOTS` | repo root | Roots to index (colon/comma-separated) |
-| `AGENT_WORKBENCH_PROJECTS_ROOT` | `~/Projects` | Secondary root scanned by diagnostics and activity |
-| `AGENT_WORKBENCH_STATE_DIR` | `~/Projects/agent-workbench/.state` | SQLite state location (index + brain). A fixed path, not one relative to the clone, so set this if you cloned elsewhere |
-| `AGENT_WORKBENCH_WORK_MCP_ROOT` | `~/Projects/work-mcp` | Optional connector sidecar (see below) |
+| `AGENT_WORKBENCH_PROJECTS_ROOT` | the directory holding the clone | Secondary root scanned by diagnostics and activity |
+| `AGENT_WORKBENCH_STATE_DIR` | `.state/` inside the clone | SQLite state location (index + brain). Moves with the clone |
+| `AGENT_WORKBENCH_WORK_MCP_ROOT` | `work-mcp/` beside the clone | Optional connector sidecar (see below) |
 | `AGENT_WORKBENCH_CLAUDE_HOME` / `_CODEX_HOME` | `~/.claude` / `~/.codex` | Harness config locations for diagnostics |
 
 ## MCP tools
