@@ -609,9 +609,9 @@ cd agent-workbench
         <tbody>
           <tr><td><code>AGENT_WORKBENCH_REPO_ROOT</code></td><td><code>~/repo</code></td><td>Where your work repos live.</td></tr>
           <tr><td><code>AGENT_WORKBENCH_INDEX_ROOTS</code></td><td>the repo root</td><td>Directories to index. Colon or comma separated.</td></tr>
-          <tr><td><code>AGENT_WORKBENCH_PROJECTS_ROOT</code></td><td><code>~/Projects</code></td><td>Second root that diagnostics and activity scanning cover.</td></tr>
-          <tr><td><code>AGENT_WORKBENCH_STATE_DIR</code></td><td><code>~/Projects/agent-workbench/.state</code></td><td>Where <code>index.sqlite</code> and <code>brain.sqlite</code> are written. The default is a fixed path, not a path relative to the clone, so set this if you cloned somewhere else.</td></tr>
-          <tr><td><code>AGENT_WORKBENCH_WORK_MCP_ROOT</code></td><td><code>~/Projects/work-mcp</code></td><td>The optional connector sidecar that <code>work_sources_status</code> looks for.</td></tr>
+          <tr><td><code>AGENT_WORKBENCH_PROJECTS_ROOT</code></td><td>the clone's parent directory</td><td>Second root that diagnostics and activity scanning cover.</td></tr>
+          <tr><td><code>AGENT_WORKBENCH_STATE_DIR</code></td><td><code>.state/</code> inside the clone</td><td>Where <code>index.sqlite</code> and <code>brain.sqlite</code> are written. It moves with the clone, so there is nothing to set unless you want the state somewhere else.</td></tr>
+          <tr><td><code>AGENT_WORKBENCH_WORK_MCP_ROOT</code></td><td><code>work-mcp/</code> beside the clone</td><td>The optional connector sidecar that <code>work_sources_status</code> looks for.</td></tr>
           <tr><td><code>AGENT_WORKBENCH_CLAUDE_HOME</code><br><code>AGENT_WORKBENCH_CODEX_HOME</code></td><td><code>~/.claude</code><br><code>~/.codex</code></td><td>Harness config locations the diagnostics read.</td></tr>
         </tbody>
       </table>

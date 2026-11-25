@@ -24,7 +24,7 @@ The audience is one person: the developer who installed it, reading it as
 reference while their agent is running. It is not a product being sold.
 
 - Source: `README.md` "License" section ("Currently unlicensed (all rights reserved)")
-- Source: `agent_workbench/config.py:19` (state defaults to a path under the author's own `~/Projects`)
+- Source: `agent_workbench/config.py` (state defaults to `.state/` inside the clone)
 
 The site therefore has to work as documentation. The tool reference, the
 configuration table, and the install steps are the page; there is nothing to
@@ -139,6 +139,6 @@ Questions the repo does not answer. Not guessed on the page.
 2. **Version.** `pyproject.toml:3` says `0.2.0`, `agent_workbench/mcp_server.py` `serverInfo.version` says `0.5.0`, and there are no git tags. Which is real? Until that is settled the site shows no version. (Fixing those files is outside the docs-only scope of this change.)
 3. **Supported platforms.** `setup.sh` is bash and uses `ln -s`, `$HOME`, and `command -v`, so it is a macOS/Linux install path, but no file states a supported-OS policy. Is Windows (WSL only? not at all?) a supported target? The page currently says only what the install script requires and does not claim an OS list.
 4. **License.** `README.md` says "Currently unlicensed (all rights reserved)" and `pyproject.toml:8` says `license = { text = "Private" }`, while the site is public and invites cloning. Should the page repeat the unlicensed status? It currently does not mention licensing at all.
-5. **`AGENT_WORKBENCH_STATE_DIR` default.** `agent_workbench/config.py:19` defaults to `~/Projects/agent-workbench/.state`, a fixed absolute path, not "next to the clone". A clone at another path silently uses that directory. Is that intended, or a portability bug? The docs now state the real default.
+5. **`AGENT_WORKBENCH_STATE_DIR` default.** Resolved: it used to be a fixed absolute path naming one machine's directory layout, so a clone anywhere else silently wrote to a directory that did not exist for it. It now derives from the clone, and the docs describe it that way.
 6. **Logo alt text and name.** The logo is a neural mesh over a bench. No file records what it is meant to depict, so the page uses a plain descriptive alt attribute rather than inventing a concept.
 7. **Is there a real screenshot** of `brief_task` or `brain_recall` output the owner is willing to publish? One real, redacted terminal capture would be stronger than the current text-only reference, but fabricating one is not an option.

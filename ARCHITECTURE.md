@@ -53,9 +53,9 @@ capabilities: a searchable code/product index, a persistent cross-tool memory
               +-------------------------+---------------------------+
               v                                                     v
    .state/index.sqlite   .state/brain.sqlite          scanned filesystem
-   (code index, FTS5)    (notes + rules; one      )   ~/repo, ~/Projects,
-                         (file, several tables    )
-                                                      ~/.claude, ~/.codex,
+   (code index, FTS5)    (notes + rules; one      )   the repo root, the
+                         (file, several tables    )   clone's parent, the
+                                                      harness config dirs,
                                                       work-mcp checkout
 ```
 
@@ -229,12 +229,12 @@ can override the first two per invocation).
 | Variable | Default | Affects |
 |---|---|---|
 | `AGENT_WORKBENCH_REPO_ROOT` | `~/repo` | primary work-repo root: default index root, doc search, service lookup, doctor scans |
-| `AGENT_WORKBENCH_PROJECTS_ROOT` | `~/Projects` | secondary root for doc search, service lookup, doctor scans (not indexed by default) |
+| `AGENT_WORKBENCH_PROJECTS_ROOT` | the clone's parent directory | secondary root for doc search, service lookup, doctor scans (not indexed by default) |
 | `AGENT_WORKBENCH_INDEX_ROOTS` | `[$REPO_ROOT]` | colon- or comma-separated roots the code index scans; explicit `roots` args override |
 | `AGENT_WORKBENCH_STATE_DIR` | `<clone>/.state` | where `index.sqlite` and `brain.sqlite` live |
 | `AGENT_WORKBENCH_CLAUDE_HOME` | `~/.claude` | Claude settings scanned by doctor (permissions, secrets) |
 | `AGENT_WORKBENCH_CODEX_HOME` | `~/.codex` | Codex `config.toml` scanned by doctor and work-sources; large-state checks |
-| `AGENT_WORKBENCH_WORK_MCP_ROOT` | `~/Projects/work-mcp` | sidecar connector checkout inspected by `work_sources_status` |
+| `AGENT_WORKBENCH_WORK_MCP_ROOT` | `work-mcp/` beside the clone | sidecar connector checkout inspected by `work_sources_status` |
 
 Non-env knobs on `WorkbenchConfig`: `max_text_bytes` (256 000 — per-file read/index
 cap) and `max_search_results` (50 — default `search_knowledge` limit).
