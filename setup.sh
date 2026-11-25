@@ -127,6 +127,24 @@ if [ "$DO_CLAUDE" = "y" ]; then
     fi
   done
 
+  # Slash commands: symlink each harness/commands/<name>.md into
+  # ~/.claude/commands. A command is a prompt the user invokes by name, so it
+  # belongs with the skills and agents rather than in a per-machine config.
+  mkdir -p "$HOME/.claude/commands"
+  for cmd_file in "$WORKBENCH"/harness/commands/*.md; do
+    [ -f "$cmd_file" ] || continue
+    cmd_name="$(basename "$cmd_file")"
+    cmd_link="$HOME/.claude/commands/$cmd_name"
+    if [ -L "$cmd_link" ] && [ "$(readlink "$cmd_link")" = "$cmd_file" ]; then
+      info "command '$cmd_name' already linked."
+    elif [ -e "$cmd_link" ] || [ -L "$cmd_link" ]; then
+      info "command '$cmd_name': $cmd_link already exists and is not our symlink - left as is."
+    else
+      ln -s "$cmd_file" "$cmd_link"
+      info "linked command '$cmd_name' into ~/.claude/commands."
+    fi
+  done
+
   # Transcript retention: Claude Code prunes ~/.claude/projects after
   # cleanupPeriodDays (default 30), so session history silently evaporates.
   python3 - "$HOME/.claude/settings.json" <<'PYEOF'
