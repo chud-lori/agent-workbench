@@ -311,7 +311,7 @@ footer p { margin-top: 10px; max-width: 72ch; }
 <section>
   <div class="wrap">
     <h2>What it puts on the machine</h2>
-    <p class="lede">Three stores, one SQLite state directory, no service to run. The agent talks to them over MCP; you can talk to them over the CLI.</p>
+    <p class="lede">Four surfaces, one SQLite state directory, no service to run. The agent talks to them over MCP; you can talk to them over the CLI.</p>
     <div class="surfaces">
       <div>
         <div class="panel">
@@ -319,6 +319,13 @@ footer p { margin-top: 10px; max-width: 72ch; }
           <p>Durable notes, one of seven kinds: decision, fact, gotcha, preference, todo, note, or reference. They live in SQLite FTS5 with the porter tokenizer, in a file every harness on the machine reads, so a note stored from Claude Code comes back in Codex.</p>
           <p>The repo's own convention is that a note carries a source breadcrumb (a ticket key, a Slack channel and date, a doc name, or a permalink pinned to a commit SHA). That is a convention in the standing instructions, not something the store enforces.</p>
           <p>Correcting beats stacking: <code>brain_amend</code> edits a note in place, and <code>supersedes=[ids]</code> hides the notes a new one replaces, so a stale claim cannot resurface as truth.</p>
+          <p>Ids are never reissued. SQLite frees the rowid of the highest row on delete, and a note id is a reference, cited by hand and used as the key of every side table, so a reused one would quietly rebind them.</p>
+        </div>
+        <div class="panel">
+          <h3>Rules that come back with the context</h3>
+          <p>A note records what is true. A rule records how to behave in one place, learned from a correction, because the same situation needs different behaviour in different contexts: what counts as enough testing differs between a dependency bump and a feature, and how a message reads depends on who reads it.</p>
+          <p>Rules are found by scope match, not text similarity. A correction stored while preparing a test handoff comes back on "is this ready for QA?", which shares none of its words, and note recall could never make that connection. A rule applies when every key in its scope is active, which is also how one context inherits another's rules.</p>
+          <p>Two rules that are equally specific and say overlapping things are reported as a conflict rather than silently resolved. A rule shown repeatedly and corrected anyway is flagged as probably wrong, and one never shown in its own context as probably mis-scoped.</p>
         </div>
       </div>
       <div>
@@ -377,7 +384,7 @@ cd agent-workbench
     <div class="filterbar">
       <label for="tool-filter">Filter</label>
       <input id="tool-filter" type="search" placeholder="Filter needs JavaScript" autocomplete="off" disabled aria-describedby="filter-status">
-      <span id="filter-status" role="status">Filter is starting. All 20 tools are listed below.</span>
+      <span id="filter-status" role="status">Filter is starting. All 24 tools are listed below.</span>
     </div>
 
     <div id="tool-list">
@@ -397,7 +404,7 @@ cd agent-workbench
         </div>
         <div class="tool">
           <div class="head"><span class="mcp">brain_recall</span> <span class="twin">CLI: <code>run_cli.py recall</code></span></div>
-          <p>Search notes by query, project, or kind, or omit the query for the most recent. <code>thread=&lt;key&gt;</code> returns one storyline in chronological order with superseded entries collapsed to stubs. <code>since</code> and <code>until</code> bound by when a note was stored, and accept <code>yesterday</code>, a date, or <code>7d</code>. Resolved and superseded notes stay hidden unless you ask for them.</p>
+          <p>Search notes by query, project, or kind, or omit the query for the most recent. <code>thread=&lt;key&gt;</code> returns one storyline in chronological order with superseded entries collapsed to stubs. <code>since</code> and <code>until</code> bound by when a note was stored, and accept <code>yesterday</code>, a date, or <code>7d</code>. Resolved and superseded notes stay hidden unless you ask for them. Every hit is counted: a note carries a recall tally and a last-read stamp, and a note that keeps proving useful wins a tie against an equally-matching note nobody has opened. Date-ordered results are left alone, because that ordering exists to preserve a timeline.</p>
         </div>
         <div class="tool">
           <div class="head"><span class="mcp">brain_amend</span> <span class="twin">CLI: <code>run_cli.py amend</code></span></div>
@@ -418,6 +425,26 @@ cd agent-workbench
         <div class="tool">
           <div class="head"><span class="mcp">brain_export</span> <span class="twin">CLI: <code>run_cli.py export</code></span></div>
           <p>Dump every note, resolved ones included, as markdown, optionally straight to a file. This is the backup: the brain is the only part of the state directory that cannot be rebuilt.</p>
+        </div>
+      </div>
+
+      <div class="group" data-group>
+        <h3>Contextual rules</h3>
+        <div class="tool">
+          <div class="head"><span class="mcp">brain_rule_remember</span> <span class="twin">CLI: <code>run_cli.py rule "&lt;statement&gt;"</code></span></div>
+          <p>A note records what is true; a rule records how to behave in one context. Store the behaviour, the reason, one real case, and the narrowest scope that explains the correction: <code>repo:x</code>, <code>workstream:y</code>, <code>task:z</code>, <code>audience:qa</code>, <code>channel:c</code>. A rule restating one already in the same scope sharpens it rather than stacking a near-duplicate. A rule with no scope applies everywhere, and one that is wrong somewhere gets ignored everywhere.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">brain_rules_in_force</span> <span class="twin">CLI: <code>run_cli.py rules</code></span></div>
+          <p>The rules governing the active context, most specific first. Found by scope match rather than text similarity, so a correction stored while preparing a test handoff comes back on "is this ready for QA?", which shares none of its words. A rule applies when every key in its scope is active, which is also how one context inherits another's rules. Rules that are equally specific and say overlapping things come back as conflicts rather than being resolved silently.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">brain_rule_feedback</span> <span class="twin">CLI: <code>run_cli.py rule-feedback &lt;id&gt; &lt;outcome&gt;</code></span></div>
+          <p>Record that a surfaced rule failed, or retire it. There is no outcome for having followed a rule, on purpose: whether a model obeyed one is self-reported, and self-reported compliance is not evidence. What can be measured is that a rule was shown and the output still had to be corrected.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">brain_context</span> <span class="twin">CLI: <code>run_cli.py rule-context &lt;key&gt;</code></span></div>
+          <p>One context's rules, plus the two health flags that make a bad rule visible: never surfaced here, which usually means it is scoped to keys that never occur together, and corrected more than once after being shown, which usually means the rule itself is wrong.</p>
         </div>
       </div>
 
@@ -487,7 +514,7 @@ cd agent-workbench
       <button type="button" id="clear-filter">Clear the filter</button>
     </div>
 
-    <p class="note">Three CLI commands have no MCP twin: <code>context</code> summarises one path, <code>recall-brief</code> returns the compact note lines the prompt hook injects, and <code>mcp-server</code> is what the MCP registration actually runs.</p>
+    <p class="note">Four CLI commands have no MCP twin: <code>context</code> summarises one path, <code>recall-brief</code> and <code>rules-brief</code> return the compact note lines and rule lines the prompt hook injects, and <code>mcp-server</code> is what the MCP registration actually runs.</p>
   </div>
 </section>
 
@@ -506,7 +533,8 @@ cd agent-workbench
         <span class="event">UserPromptSubmit</span>
         <h3>Recall</h3>
         <p>Matches your prompt against the brain and injects up to five one-line hits, ids included. Bodies stay pull-based through <code>brain_recall</code>, so the injection stays small. Timeout 10 seconds.</p>
-        <p class="caveat">The CLI side is threshold-gated: a short or trivial prompt injects nothing rather than noise.</p>
+        <p>It then injects the contextual rules that govern where you are, derived from the working directory. That half is not threshold-gated, because a rule is already scoped to where it belongs and a one-word prompt is exactly where an unrepeated rule gets forgotten.</p>
+        <p class="caveat">Note recall is threshold-gated: a short or trivial prompt injects no notes rather than noise.</p>
       </li>
       <li>
         <span class="event">Stop</span>
@@ -565,6 +593,7 @@ cd agent-workbench
     </div>
 
     <p class="note">A subagent gets no SessionStart priming, no prompt-recall injection, and none of the parent's context. Recall has to live in its own system prompt or it never happens, which is the entire reason these three types exist.</p>
+    <p class="note">Each type also declares the shape of its return, and the parent validates the reply before acting on it. Every record has to name its evidence: a path and line, a note id, a commit, or for an implementer the verification command and what it actually printed. A record that names none is rejected, and one bad record rejects the whole return rather than being dropped quietly, because prose reads the same whether a claim was checked or guessed.</p>
   </div>
 </section>
 
