@@ -41,6 +41,8 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 | `brief_task` | one-call task context pack (code + docs + brain + pinned references + commands; warns on prod-divergent repos) |
 | `brain_remember` / `brain_recall` / `brain_forget` | persistent cross-session, cross-tool memory (`supersedes=[ids]` retires corrected notes; `thread=` digests a storyline; `since=`/`until=` bounds by when a note was stored) |
 | `brain_amend` | correct/extend an existing note in place (append a dated addendum or replace) |
+| `brain_rule_remember` / `brain_rules_in_force` | contextual **rules** — how to behave in a context, learned from a correction. Retrieved by scope match, never text similarity |
+| `brain_rule_feedback` / `brain_context` | record that a surfaced rule failed or retire it; view one context's rules plus health flags (never surfaced, keeps being corrected) |
 | recall telemetry | every `brain_recall` hit increments that note's `recall_count` and stamps `last_recalled_at`. A rehearsed note then outranks an equally-matching note nobody has opened. Counters appear in recall output only once non-zero, and never reorder a date-ordered listing |
 | `brain_promote` | append a proven note to a shared, git-versioned markdown reference (team playbook); stamps the note so it promotes once |
 | `brain_resolve` | mark a todo/note resolved (hidden from default recall; `include_resolved` shows it) |
@@ -147,6 +149,8 @@ Degrades cleanly: any missing source is skipped and called out, since a silently
 - `/meeting-prep` — one-page brief for the next calendar event: agenda + what changed since last occurrence + what you owe / are owed + likely topics, from calendar, Slack, Jira, PRs, and brain notes.
 - `/pr-review` — opinionated review of a GitHub PR, branch, or working diff: loads the project's recorded gotchas/decisions first (a change that walks back into a recorded trap is the highest-value finding), then checks comment noise, overengineering, security, algorithmic efficiency, simplicity, and maintainability. Every finding needs a concrete fix; an "overengineered" call must name the simpler alternative and an "inefficient" one must name the scale where it hurts. Posting to GitHub is approval-gated and never `--approve`s. Complements Claude Code's built-in `/code-review` (correctness bugs) rather than duplicating it. Findings cite numbered rules from `harness/skills/pr-review/rules.md` (CR-01…CR-38, tiered Gate / Justify / Lock, each naming the evidence it demands), are attacked once before being reported (a finding you never tried to kill is a guess with a rule number attached), and can be written as records checked by `harness/skills/pr-review/validate_findings.py` — stdlib, no dependencies — which fails a `confirmed` record missing its trace, an unknown rule id, or a severity on a `needs_validation` record. The review closes with a mechanical verdict — FAIL on any Gate finding, PASS WITH FIXES, or an honest PASS. CR-35…37 make a recorded gotcha, decision, or preference outrank any generic review opinion.
 
+- `/voice` — drafts a message in the user's own voice, and learns that voice from the messages they actually sent. It owns the harvest and the draft gate; it does **not** own storage. Voice is one context (`audience:<person>`, `channel:<name>`), so a voice rule is an ordinary contextual rule in the rule engine, and `brain_context audience:<name>` *is* the profile — there is no second artifact to keep in sync. The live thread outranks a harvested pattern, raw message bodies and `U0…` ids are never stored, and with no Slack connector it says so and falls back to the brain's existing correction notes.
+
 setup.sh symlinks every directory under `harness/skills/`, so these install with the rest; manually:
 
 ```bash
@@ -193,10 +197,23 @@ for c in "$WORKBENCH"/harness/commands/*.md; do ln -s "$c" ~/.claude/commands/"$
 ```
 
 A newly linked command is live immediately, including in the session that linked it.
+**13. Contextual rules (any harness):** a brain note records *what is true*; a rule records *how to behave here*. The two are not interchangeable, because the same situation needs different behaviour in different contexts — what counts as enough testing depends on whether it is a dependency bump or a feature, and how a message is phrased depends on who reads it.
 
-**13. Transcript retention (Claude Code):** setup.sh sets `cleanupPeriodDays: 3650` in `~/.claude/settings.json` when unset. Claude Code otherwise prunes `~/.claude/projects` after **30 days**, silently deleting session history on a rolling basis. An existing value is left alone.
+Rules live in their own table in `brain.sqlite` and are retrieved by **scope match, not text similarity**. That is the whole point: a correction stored while preparing a test handoff comes back on "is this ready for QA?", which shares no words with it. Note recall could never make that connection.
 
-**14. Install the commit attribution guard (any agent, any harness):** two plain git hooks in `harness/git-hooks/`, so the rule holds for *every* assistant that commits — and for humans — rather than depending on one vendor's instructions:
+- `brain_rule_remember` — statement, the user's reason, one real example, and the narrowest scope that explains the correction: `repo:x`, `workstream:y`, `task:z`, `audience:qa`, `channel:c`. A rule restating one already in the same scope sharpens it rather than stacking a near-duplicate.
+- `brain_rules_in_force` — the rules governing the active context, most specific first. A rule applies when **every** key in its scope is active, which is also the inheritance mechanism: declare `repo:svc` and `workstream:runtime-upgrade` together and you inherit the rules of each, with no parent pointers. Ties fall to the key type, ordered `repo` > `workstream` > `task` > `audience` > `channel`, then to the newest rule.
+- `brain_rule_feedback` / `brain_context` — a rule corrected twice after being shown is wrong; one `brain_context` reports as never surfaced is scoped to keys that never co-occur. Neither is visible unless the failure is recorded.
+
+**Conflicts are reported, not hidden.** Two equally-specific rules whose statements overlap come back as `conflicts`, and the standing instructions say to follow the first and name it. Two equally-specific rules that say unrelated things are not a conflict, they are two rules.
+
+**There is deliberately no `applied` outcome.** Whether the model truly obeyed a rule is self-reported, and self-reported compliance is not evidence. What can be measured is that a rule was surfaced and that the user still had to correct the output.
+
+`prompt-recall.sh` injects the rules in force on every prompt, next to the note hits. Unlike note recall it is not threshold-gated, because a rule is already scoped to where it belongs, and a one-word prompt is exactly where an unrepeated rule gets forgotten.
+
+**14. Transcript retention (Claude Code):** setup.sh sets `cleanupPeriodDays: 3650` in `~/.claude/settings.json` when unset. Claude Code otherwise prunes `~/.claude/projects` after **30 days**, silently deleting session history on a rolling basis. An existing value is left alone.
+
+**15. Install the commit attribution guard (any agent, any harness):** two plain git hooks in `harness/git-hooks/`, so the rule holds for *every* assistant that commits — and for humans — rather than depending on one vendor's instructions:
 
 - `commit-msg` **strips** AI-attribution lines (`Co-Authored-By:` / `Assisted-by:` naming an assistant, `Generated with …`, robot-emoji lines) and reports what it removed. It strips rather than rejects because the outcome that matters is a clean message, and stripping reaches it in one pass even when an agent's own harness keeps re-adding the trailer.
 - `pre-commit` **refuses** a commit whose author or committer is an assistant/bot identity, or whose email is unset. Identity is fixed before the message exists and a hook cannot rewrite it, so this one must reject.
