@@ -16,6 +16,13 @@ VALID_KINDS = {"decision", "fact", "gotcha", "preference", "todo", "note", "refe
 # One grouping heuristic among several — the brain is domain-agnostic.
 _KEY_PATTERN = re.compile(r"\b[A-Z][A-Z0-9]{1,9}-\d{1,8}\b")
 
+# A note that keeps proving useful should outrank an equally-matching note
+# nobody has opened. The cap keeps one heavily-rehearsed note from burying a
+# better textual match; bm25 scores here run roughly -0.5 to -10, so the
+# boost shifts ties rather than overturning relevance.
+RECALL_BOOST = 0.05
+RECALL_BOOST_CAP = 10
+
 
 def remember(
     content: str,
@@ -163,12 +170,21 @@ def recall(
         if not include_superseded:
             clauses.append("superseded_by is null")
         where = f"where {' and '.join(clauses)}" if clauses else ""
-        order = "order by bm25(notes)" if query and query.strip() else "order by created_at desc, rowid desc"
+        # Recency ordering is left alone: a boost there would reorder a
+        # timeline, which is the one thing that ordering exists to preserve.
+        order = (
+            f"order by bm25(notes) - min(coalesce(note_stats.recall_count, 0), {RECALL_BOOST_CAP}) * {RECALL_BOOST}"
+            if query and query.strip()
+            else "order by created_at desc, notes.rowid desc"
+        )
         rows = conn.execute(
-            f"select rowid as id, content, kind, project, tags, created_at, resolved_at, superseded_by "
-            f"from notes {where} {order} limit ?",
+            f"select notes.rowid as id, content, kind, project, tags, created_at, resolved_at, superseded_by, "
+            f"coalesce(note_stats.recall_count, 0) as recall_count, note_stats.last_recalled_at "
+            f"from notes left join note_stats on note_stats.note_id = notes.rowid "
+            f"{where} {order} limit ?",
             (*params, limit),
         ).fetchall()
+        _record_recall(conn, [row["id"] for row in rows])
         total = conn.execute("select count(*) from notes").fetchone()[0]
         result: dict[str, Any] = {
             "query": query,
@@ -229,6 +245,7 @@ def _thread_digest(conn: sqlite3.Connection, thread: str, limit: int) -> dict[st
             )
         else:
             active.append(note)
+    _record_recall(conn, [note["id"] for note in active])
     return {
         "thread": token,
         "notes": active,
@@ -341,6 +358,9 @@ def forget(note_id: int, config: WorkbenchConfig | None = None) -> dict[str, Any
     conn = _connect(config)
     try:
         cursor = conn.execute("delete from notes where rowid=?", (note_id,))
+        # FTS5 reuses a freed rowid, so a surviving stats row would hand the
+        # deleted note's recall count to whatever note is stored next.
+        conn.execute("delete from note_stats where note_id=?", (note_id,))
         conn.commit()
         return {"id": note_id, "deleted": cursor.rowcount > 0}
     finally:
@@ -403,6 +423,14 @@ def export(path: str | None = None, config: WorkbenchConfig | None = None) -> di
     return result
 
 
+STATS_SCHEMA = """
+        create table if not exists note_stats(
+            note_id integer primary key,
+            recall_count integer not null default 0,
+            last_recalled_at integer
+        )
+"""
+
 NOTES_SCHEMA = """
         create virtual table if not exists {name} using fts5(
             content,
@@ -428,6 +456,7 @@ def _connect(config: WorkbenchConfig) -> sqlite3.Connection:
         _migrate(conn)
     else:
         conn.execute(NOTES_SCHEMA.format(name="notes"))
+    conn.execute(STATS_SCHEMA)
     return conn
 
 
@@ -451,6 +480,27 @@ def _migrate(conn: sqlite3.Connection) -> None:
         raise
 
 
+def _record_recall(conn: sqlite3.Connection, note_ids: list[int]) -> None:
+    """Count a read of each note. Best effort, and deliberately so.
+
+    Recall is a read path that several sessions can hit at once, so a locked
+    database must not fail the lookup the caller actually asked for. A lost
+    count is acceptable; a failed recall is not.
+    """
+    if not note_ids:
+        return
+    now = int(time.time())
+    try:
+        conn.executemany(
+            "insert into note_stats(note_id, recall_count, last_recalled_at) values (?, 1, ?) "
+            "on conflict(note_id) do update set recall_count = recall_count + 1, last_recalled_at = ?",
+            [(note_id, now, now) for note_id in note_ids],
+        )
+        conn.commit()
+    except sqlite3.Error:
+        pass
+
+
 def _iso(epoch: int) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(epoch))
 
@@ -463,6 +513,12 @@ def _note_dict(row: sqlite3.Row) -> dict[str, Any]:
         note["resolved_at_iso"] = _iso(note["resolved_at"])
     if not note.get("superseded_by"):
         note.pop("superseded_by", None)
+    if note.get("last_recalled_at"):
+        note["last_recalled_at_iso"] = _iso(note["last_recalled_at"])
+    else:
+        note.pop("last_recalled_at", None)
+    if not note.get("recall_count"):
+        note.pop("recall_count", None)
     return note
 
 
