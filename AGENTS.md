@@ -176,9 +176,24 @@ The parent's half of the job is a standing instruction: hand a subagent *evidenc
 
 This also keeps agent prompts free of any machine-specific clone path. `tests/test_agent_types.py` fails if an agent is told to use a tool its allowlist lacks.
 
-**12. Transcript retention (Claude Code):** setup.sh sets `cleanupPeriodDays: 3650` in `~/.claude/settings.json` when unset. Claude Code otherwise prunes `~/.claude/projects` after **30 days**, silently deleting session history on a rolling basis. An existing value is left alone.
+**12. Install the slash commands (Claude Code):** `harness/commands/*.md` ships prompts you invoke by name. A command is the right shape when the *behaviour* should be opt-in per turn rather than standing — the opposite of a hook, which fires on every turn in every project whether you wanted it or not.
 
-**13. Install the commit attribution guard (any agent, any harness):** two plain git hooks in `harness/git-hooks/`, so the rule holds for *every* assistant that commits — and for humans — rather than depending on one vendor's instructions:
+- `/say <prompt>` — answers, then speaks the answer aloud through macOS `say`. The model writes a short spoken version (no markdown, no code, no URLs) and plays it detached, so a long utterance does not hold the turn open.
+
+A Stop hook could speak every reply instead, and that was the first design. It does not survive contact with the Stop hook in step 5: that one blocks turn-end once, so `Stop` fires twice per turn, and a speaking hook reads a half-finished answer on the first fire before being killed mid-word and restarted on the second. `stop_hook_active` does not reliably distinguish the last fire, so there is no clean gate. A command also lets the model write *for the ear* rather than running a finished reply through a markdown stripper.
+
+setup.sh symlinks every `harness/commands/*.md` into `~/.claude/commands/`; manually:
+
+```bash
+mkdir -p ~/.claude/commands
+for c in "$WORKBENCH"/harness/commands/*.md; do ln -s "$c" ~/.claude/commands/"$(basename "$c")"; done
+```
+
+A newly linked command is live immediately, including in the session that linked it.
+
+**13. Transcript retention (Claude Code):** setup.sh sets `cleanupPeriodDays: 3650` in `~/.claude/settings.json` when unset. Claude Code otherwise prunes `~/.claude/projects` after **30 days**, silently deleting session history on a rolling basis. An existing value is left alone.
+
+**14. Install the commit attribution guard (any agent, any harness):** two plain git hooks in `harness/git-hooks/`, so the rule holds for *every* assistant that commits — and for humans — rather than depending on one vendor's instructions:
 
 - `commit-msg` **strips** AI-attribution lines (`Co-Authored-By:` / `Assisted-by:` naming an assistant, `Generated with …`, robot-emoji lines) and reports what it removed. It strips rather than rejects because the outcome that matters is a clean message, and stripping reaches it in one pass even when an agent's own harness keeps re-adding the trailer.
 - `pre-commit` **refuses** a commit whose author or committer is an assistant/bot identity, or whose email is unset. Identity is fixed before the message exists and a hook cannot rewrite it, so this one must reject.
