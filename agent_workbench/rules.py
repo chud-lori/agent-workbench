@@ -23,12 +23,38 @@ from .config import WorkbenchConfig, default_config
 KEY_PRECEDENCE = ("repo", "workstream", "task", "audience", "channel")
 
 GLOBAL_SCOPE = "global"
+# A global rule gets this sentinel row in rule_scope so the lookup can be
+# driven entirely off the key index. _KEY_RE demands a type:value shape, so a
+# real scope key can never collide with it.
+_GLOBAL_KEY = "@global"
 FEEDBACK_OUTCOMES = ("corrected", "retire")
 
 # Two statements this close are the same rule restated, so a repeat correction
 # sharpens the existing rule instead of stacking a near-duplicate beside it.
 _SIMILAR_RATIO = 0.6
 _KEY_RE = re.compile(r"^[a-z][a-z0-9_]*:[^\s]+$")
+
+# scope and trigger are stored on the rule as text because that is what a human
+# reads back. These are the indexed form used to find candidates: without them
+# every lookup scanned the whole table and filtered in Python, on a path the
+# UserPromptSubmit hook runs on every single turn.
+SCOPE_SCHEMA = """
+        create table if not exists rule_scope(
+            rule_id integer not null,
+            key text not null,
+            primary key (rule_id, key)
+        )
+"""
+SCOPE_INDEX = "create index if not exists rule_scope_key on rule_scope(key)"
+
+TRIGGER_SCHEMA = """
+        create table if not exists rule_trigger(
+            rule_id integer not null,
+            token text not null,
+            primary key (rule_id, token)
+        )
+"""
+TRIGGER_INDEX = "create index if not exists rule_trigger_token on rule_trigger(token)"
 
 RULES_SCHEMA = """
         create table if not exists rules(
@@ -48,6 +74,68 @@ RULES_SCHEMA = """
             retired_at integer
         )
 """
+
+
+def _ensure_tables(conn: sqlite3.Connection) -> None:
+    """Create the rule tables and index any rule stored before they existed."""
+    conn.execute(RULES_SCHEMA)
+    conn.execute(SCOPE_SCHEMA)
+    conn.execute(SCOPE_INDEX)
+    conn.execute(TRIGGER_SCHEMA)
+    conn.execute(TRIGGER_INDEX)
+    unindexed = conn.execute(
+        "select id, scope, trigger from rules where id not in (select rule_id from rule_scope)"
+    ).fetchall()
+    for row in unindexed:
+        _reindex(conn, row[0], row[1], row[2])
+    if unindexed:
+        conn.commit()
+
+
+def _reindex(conn: sqlite3.Connection, rule_id: int, scope_text: str, trigger_text: str | None) -> None:
+    conn.execute("delete from rule_scope where rule_id=?", (rule_id,))
+    conn.execute("delete from rule_trigger where rule_id=?", (rule_id,))
+    keys = [_GLOBAL_KEY] if scope_text == GLOBAL_SCOPE else scope_text.split()
+    conn.executemany(
+        "insert or ignore into rule_scope(rule_id, key) values (?, ?)",
+        [(rule_id, key) for key in keys],
+    )
+    if trigger_text:
+        conn.executemany(
+            "insert or ignore into rule_trigger(rule_id, token) values (?, ?)",
+            [(rule_id, token) for token in trigger_text.split()],
+        )
+
+
+def _candidate_sql(active: list[str], prompt_tokens: list[str]) -> tuple[str, tuple[Any, ...]]:
+    """The candidate query, narrowed in SQL instead of scanned in Python.
+
+    A scoped rule qualifies only when NO key of its scope is missing from the
+    active set, which is the indexed form of "every key must be active".
+    """
+    # Every branch is driven off an index on rule_scope.key or
+    # rule_trigger.token, so the number of rows examined follows the number of
+    # rules that could match, not the number of rules stored.
+    sources = ["select rule_id from rule_scope where key = ?"]
+    params: list[Any] = [_GLOBAL_KEY]
+    if active:
+        holes = ",".join("?" * len(active))
+        sources.append(
+            f"select rule_id from rule_scope where key in ({holes}) group by rule_id "
+            "having count(*) = (select count(*) from rule_scope total where total.rule_id = rule_scope.rule_id)"
+        )
+        params.extend(active)
+    if prompt_tokens:
+        holes = ",".join("?" * len(prompt_tokens))
+        sources.append(f"select rule_id from rule_trigger where token in ({holes})")
+        params.extend(prompt_tokens)
+    candidates = " union ".join(sources)
+    return f"select * from rules where retired_at is null and id in ({candidates})", tuple(params)
+
+
+def _candidates(conn: sqlite3.Connection, active: list[str], prompt_tokens: list[str]) -> list[sqlite3.Row]:
+    sql, params = _candidate_sql(active, prompt_tokens)
+    return conn.execute(sql, params).fetchall()
 
 
 def remember_rule(
@@ -82,7 +170,7 @@ def remember_rule(
     conn = _connect(config)
     conn.row_factory = sqlite3.Row
     try:
-        conn.execute(RULES_SCHEMA)
+        _ensure_tables(conn)
         twin = _find_twin(conn, statement, scope_text)
         if twin is not None:
             merged_example = twin["example"] or example
@@ -93,6 +181,7 @@ def remember_rule(
                 "trigger=coalesce(?, trigger), source=coalesce(?, source), updated_at=? where id=?",
                 (statement, why, merged_example, trigger_text, source, now, twin["id"]),
             )
+            _reindex(conn, twin["id"], scope_text, trigger_text or twin["trigger"])
             conn.commit()
             return {
                 "id": twin["id"],
@@ -106,6 +195,7 @@ def remember_rule(
             "values (?, ?, ?, ?, ?, ?, ?, ?)",
             (statement, why, example, scope_text, trigger_text, source, now, now),
         )
+        _reindex(conn, cursor.lastrowid, scope_text, trigger_text)
         conn.commit()
         result: dict[str, Any] = {
             "id": cursor.lastrowid,
@@ -150,8 +240,8 @@ def rules_in_force(
     conn = _connect(config)
     conn.row_factory = sqlite3.Row
     try:
-        conn.execute(RULES_SCHEMA)
-        rows = conn.execute("select * from rules where retired_at is null").fetchall()
+        _ensure_tables(conn)
+        rows = _candidates(conn, active, sorted(prompt_tokens))
         scored: list[tuple[tuple[int, int], dict[str, Any]]] = []
         active_set = set(active)
         for row in rows:
@@ -198,9 +288,12 @@ def rule_feedback(rule_id: int, outcome: str, config: WorkbenchConfig | None = N
     now = int(time.time())
     conn = _connect(config)
     try:
-        conn.execute(RULES_SCHEMA)
+        _ensure_tables(conn)
         if outcome == "retire":
             cursor = conn.execute("update rules set retired_at=? where id=? and retired_at is null", (now, rule_id))
+            if cursor.rowcount:
+                conn.execute("delete from rule_scope where rule_id=?", (rule_id,))
+                conn.execute("delete from rule_trigger where rule_id=?", (rule_id,))
         else:
             cursor = conn.execute(
                 "update rules set corrected_count = corrected_count + 1, last_corrected_at=? where id=?",
@@ -228,13 +321,13 @@ def context_view(key: str, config: WorkbenchConfig | None = None) -> dict[str, A
     conn = _connect(config)
     conn.row_factory = sqlite3.Row
     try:
-        conn.execute(RULES_SCHEMA)
-        rows = conn.execute("select * from rules where retired_at is null").fetchall()
-        rules = [
-            _rule_dict(row, scope_hit=True, trigger_hit=False)
-            for row in rows
-            if row["scope"] == GLOBAL_SCOPE or key in row["scope"].split()
-        ]
+        _ensure_tables(conn)
+        rows = conn.execute(
+            "select * from rules where retired_at is null and id in "
+            "(select rule_id from rule_scope where key in (?, ?))",
+            (key, _GLOBAL_KEY),
+        ).fetchall()
+        rules = [_rule_dict(row, scope_hit=True, trigger_hit=False) for row in rows]
         rules.sort(key=lambda rule: (rule["specificity"], rule.get("updated_at") or 0), reverse=True)
         never = [rule["id"] for rule in rules if not rule.get("surfaced_count")]
         failing = [rule["id"] for rule in rules if rule.get("corrected_count", 0) >= 2]
