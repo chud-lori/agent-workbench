@@ -10,6 +10,7 @@ from .code_index import code_search, codebase_overview, index_status, rebuild_in
 from .config import default_config
 from .knowledge import brief_task, find_service_context, search_knowledge
 from .repo_state import repo_state
+from .rules import context_view, remember_rule, rule_feedback, rules_in_force
 from .scanners import doctor_report, mcp_health
 from .util import dump_json
 from .work_sources import work_sources_status
@@ -73,6 +74,56 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "mode": {"type": "string", "enum": ["append", "replace"]},
             },
             "required": ["id", "content"],
+            "additionalProperties": False,
+        },
+    },
+    "brain_rule_remember": {
+        "description": "Store a contextual RULE: how to behave in a context, learned from a correction. Different from brain_remember, which stores what is true. Give the narrowest scope that explains the correction (repo:x, workstream:y, audience:qa, task:z, channel:c) — a global rule applies everywhere and a global rule that is wrong somewhere gets ignored everywhere. A correction that restates an existing rule in the same scope sharpens that rule instead of duplicating it.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "statement": {"type": "string", "description": "The behaviour to follow"},
+                "scope": {"type": "array", "items": {"type": "string"}, "description": "Context keys, each type:value. Omit for a rule that truly holds everywhere"},
+                "why": {"type": "string", "description": "The user's reason, quoted where possible"},
+                "example": {"type": "string", "description": "One real case this came from"},
+                "trigger": {"type": "array", "items": {"type": "string"}, "description": "Words that signal the context is active even when the scope keys are not known"},
+                "source": {"type": "string", "description": "Where this came from: ticket, thread, file:line, session date"},
+            },
+            "required": ["statement"],
+            "additionalProperties": False,
+        },
+    },
+    "brain_rules_in_force": {
+        "description": "The rules governing the active context, most specific first. Retrieved by scope match rather than text similarity, so a rule comes back when you are in its context even when the prompt shares no words with the correction that created it. Reports which rules overlap at equal specificity so an ambiguity is visible rather than silently resolved.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "The current request, matched against rule triggers"},
+                "context": {"type": "array", "items": {"type": "string"}, "description": "Active context keys, each type:value"},
+                "project": {"type": "string", "description": "Repo dir name; adds repo:<name> to the context"},
+                "limit": {"type": "integer"},
+            },
+            "additionalProperties": False,
+        },
+    },
+    "brain_rule_feedback": {
+        "description": "Record that a surfaced rule failed (outcome=corrected), or retire it (outcome=retire). There is no 'applied' outcome on purpose: self-reported compliance is not evidence, so the measurable facts are that a rule was surfaced and that the output still had to be corrected.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer"},
+                "outcome": {"type": "string", "enum": ["corrected", "retire"]},
+            },
+            "required": ["id", "outcome"],
+            "additionalProperties": False,
+        },
+    },
+    "brain_context": {
+        "description": "Everything known about behaving in one context: its rules most-specific-first, plus health flags — rules never surfaced there (likely mis-scoped) and rules corrected more than once after being shown (likely wrong).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"key": {"type": "string", "description": "A single context key, type:value"}},
+            "required": ["key"],
             "additionalProperties": False,
         },
     },
@@ -252,6 +303,24 @@ def serve() -> int:
             supersedes=args.get("supersedes"),
         ),
         "brain_promote": lambda args: promote(args.get("id", 0), args.get("target", ""), default_config()),
+        "brain_rule_remember": lambda args: remember_rule(
+            args.get("statement", ""),
+            args.get("scope"),
+            args.get("why"),
+            args.get("example"),
+            args.get("trigger"),
+            args.get("source"),
+            default_config(),
+        ),
+        "brain_rules_in_force": lambda args: rules_in_force(
+            args.get("prompt"),
+            args.get("context"),
+            args.get("project"),
+            args.get("limit", 10),
+            default_config(),
+        ),
+        "brain_rule_feedback": lambda args: rule_feedback(args.get("id", 0), args.get("outcome", ""), default_config()),
+        "brain_context": lambda args: context_view(args.get("key", ""), default_config()),
         "brain_amend": lambda args: amend(
             args.get("id", 0),
             args.get("content", ""),

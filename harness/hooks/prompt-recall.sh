@@ -3,7 +3,7 @@
 #
 # Approximates involuntary human recall: on every user prompt, FTS-match the
 # prompt against brain notes and inject up to 5 one-line hits (ids + hooks)
-# into the context. Bodies stay pull-based via brain_recall. The CLI side
+# into the context, then inject the rules that govern the active context. Bodies stay pull-based via brain_recall. The CLI side
 # (recall-brief) is threshold-gated so trivial prompts inject nothing, and a
 # hook must never break the session: every step is best-effort, always exit 0.
 #
@@ -33,5 +33,9 @@ EOF
 # recall-brief prints nothing when the prompt is trivial or nothing matches;
 # whatever it prints lands in the model's context for this turn.
 python3 "$WORKBENCH/run_cli.py" recall-brief "$prompt" 2>/dev/null || true
+
+# Rules are scoped, so they only fire where they belong and need no threshold:
+# a one-word prompt is exactly where an unrepeated rule gets forgotten.
+python3 "$WORKBENCH/run_cli.py" rules-brief "$prompt" 2>/dev/null || true
 
 exit 0
