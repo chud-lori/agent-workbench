@@ -41,6 +41,7 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 | `brief_task` | one-call task context pack (code + docs + brain + pinned references + commands; warns on prod-divergent repos) |
 | `brain_remember` / `brain_recall` / `brain_forget` | persistent cross-session, cross-tool memory (`supersedes=[ids]` retires corrected notes; `thread=` digests a storyline; `since=`/`until=` bounds by when a note was stored) |
 | `brain_amend` | correct/extend an existing note in place (append a dated addendum or replace) |
+| recall telemetry | every `brain_recall` hit increments that note's `recall_count` and stamps `last_recalled_at`. A rehearsed note then outranks an equally-matching note nobody has opened. Counters appear in recall output only once non-zero, and never reorder a date-ordered listing |
 | `brain_promote` | append a proven note to a shared, git-versioned markdown reference (team playbook); stamps the note so it promotes once |
 | `brain_resolve` | mark a todo/note resolved (hidden from default recall; `include_resolved` shows it) |
 | `brain_export` | dump all brain notes to markdown (backup) |
