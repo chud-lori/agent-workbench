@@ -169,6 +169,8 @@ for a in "$WORKBENCH"/harness/agents/*.md; do ln -s "$a" ~/.claude/agents/"$(bas
 
 The parent's half of the job is a standing instruction: hand a subagent *evidence* (file:line, the snippet, `brain#id`), not conclusions it must re-derive.
 
+**Their return is schema-checked, not read as prose.** Each type declares a ```returns-schema``` block in its own markdown, and the parent runs `harness/agents/validate_return.py <type> -` over the reply before believing any of it. Every record must name evidence — `path`, `brain_id`, `commit`, or for an implementer the verification command and what it printed — because a claim the parent cannot trace is a guess with a sentence around it. One bad record rejects the **whole** return: dropping it would lose work silently, which is the failure the validator exists to prevent. An empty record list is legal only for `adversary`, where finding no bug is a real answer. `tests/test_agent_returns.py` also checks each agent's own worked example against its own schema, so a type cannot teach the shape it would reject.
+
 **They recall through Bash, not the MCP tools.** Each type runs with a restricted `tools:` allowlist, and that allowlist holds no `mcp__agent-workbench__*` tool — so an instruction to call `brain_recall` is an instruction to call a tool the agent does not have. The first version shipped exactly that: agents guessed a name (`agent-workbench__brain_recall`) and failed with "No such tool available". Listing an MCP tool in `tools:` is not a dependable fix either, since unknown allowlist names are dropped silently. So setup.sh installs a launcher at `~/.config/agent-workbench/bin/aw` (outside the clone, like the git hooks) and every agent type recalls with it:
 
 ```bash

@@ -132,6 +132,8 @@ Subagents get no hooks and none of the parent's context, so brain recall has to 
 - `implementer` - implements against recorded decisions, gotchas, and preferences, matches surrounding style, verifies with the project's own checks
 - `adversary` - loads known failure modes first, then reviews a diff for findings with a concrete failure scenario
 
+Each type declares the shape of its return, and the parent validates it with `harness/agents/validate_return.py` before acting. A record that names no evidence is rejected, and one bad record rejects the whole return rather than being quietly dropped.
+
 ## Slash commands (Claude Code)
 
 `harness/commands/` ships prompts you invoke by name, symlinked into `~/.claude/commands/`. A command is for behaviour that should be opt-in per turn, where a hook would fire on every turn in every project.
