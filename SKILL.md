@@ -33,7 +33,7 @@ A subagent gets **no** hooks — no brain priming, no prompt-recall injection �
 python3 harness/agents/validate_return.py scout - <<< "$reply"
 ```
 
-Every record must name its evidence — `path`, `brain_id`, `commit`, or for an implementer the verification command and what it actually printed. A record that names none is rejected, because a claim you cannot trace is a guess with a sentence around it. One bad record rejects the whole return rather than being dropped quietly. An empty record list is legal only for `adversary`, where finding no bug is a real answer.
+Every record must name its evidence — `path`, `brain_id`, `commit`, a `command` with what it printed, or for an implementer the verification command and what it actually printed. A record that names none is rejected, because a claim you cannot trace is a guess with a sentence around it: an uncited claim does not cross from a subagent to you, and you never cite the subagent as its source. `scout` and `adversary` records may add `verified_against` (`repo@ref sha`, or `local checkout only`). One bad record rejects the whole return rather than being dropped quietly. An empty record list is legal only for `adversary`, where finding no bug is a real answer.
 
 ## CLI equivalents
 

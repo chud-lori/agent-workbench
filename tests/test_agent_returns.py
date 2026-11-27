@@ -89,6 +89,32 @@ class ReturnSchemaTests(unittest.TestCase):
         errors = validate_return.validate("implementer", '{"records": [{"path": "a.py", "summary": "did a thing"}]}')
         self.assertTrue(any("names no evidence" in error for error in errors))
 
+    def test_no_agent_type_lets_an_uncited_record_cross(self) -> None:
+        for path in AGENTS:
+            schema = validate_return.load_schema(path.stem)
+            enums = schema.get("enums") or {}
+            record = {field: enums[field][0] if field in enums else "x" for field in schema["required"]}
+            errors = validate_return.validate(path.stem, json.dumps({"records": [record]}))
+            self.assertTrue(any("names no evidence" in error for error in errors), path.name)
+
+    def test_a_command_and_its_output_count_as_a_citation(self) -> None:
+        # Output that would not reproduce still counts; the alternative excludes most real evidence.
+        cited = {"command": "curl -s host/health -> 503", "verified_against": "local checkout only"}
+        self.assertEqual(
+            validate_return.validate("scout", json.dumps([{"claim": "x", "status": "verified", **cited}])), []
+        )
+        self.assertEqual(
+            validate_return.validate(
+                "adversary", json.dumps([{"claim": "x", "failure": "y", "confidence": "verified", **cited}])
+            ),
+            [],
+        )
+
+    def test_standing_instructions_carry_the_boundary_rule(self) -> None:
+        text = (REPO / "harness" / "standing-instructions.md").read_text()
+        self.assertIn("An uncited claim does not cross a boundary", text)
+        self.assertIn("validate_return.py", text)
+
     def test_records_are_read_from_the_last_json_fence_in_a_reply(self) -> None:
         reply = (
             "Here is an illustrative shape:\n\n```json\n{\"records\": [{\"claim\": \"ignore me\"}]}\n```\n\n"

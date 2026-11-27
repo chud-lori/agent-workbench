@@ -594,7 +594,7 @@ cd agent-workbench
     </div>
 
     <p class="note">A subagent gets no SessionStart priming, no prompt-recall injection, and none of the parent's context. Recall has to live in its own system prompt or it never happens, which is the entire reason these three types exist.</p>
-    <p class="note">Each type also declares the shape of its return, and the parent validates the reply before acting on it. Every record has to name its evidence: a path and line, a note id, a commit, or for an implementer the verification command and what it actually printed. A record that names none is rejected, and one bad record rejects the whole return rather than being dropped quietly, because prose reads the same whether a claim was checked or guessed.</p>
+    <p class="note">Each type also declares the shape of its return, and the parent validates the reply before acting on it. Every record has to name its evidence: a path and line, a note id, a commit, a command and what it printed, or for an implementer the verification command and what it actually printed. An uncited claim does not cross from a subagent to its parent, or from one session to the next. A record that names none is rejected, and one bad record rejects the whole return rather than being dropped quietly, because prose reads the same whether a claim was checked or guessed.</p>
   </div>
 </section>
 

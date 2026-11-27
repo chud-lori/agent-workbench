@@ -147,7 +147,7 @@ Subagents get no hooks and none of the parent's context, so brain recall has to 
 - `implementer` - implements against recorded decisions, gotchas, and preferences, matches surrounding style, verifies with the project's own checks, and never invokes its own reviewer
 - `adversary` - loads known failure modes first, then reviews a diff for findings with a concrete failure scenario
 
-Each type declares the shape of its return, and the parent validates it with `harness/agents/validate_return.py` before acting. A record that names no evidence is rejected, and one bad record rejects the whole return rather than being quietly dropped.
+Each type declares the shape of its return, and the parent validates it with `harness/agents/validate_return.py` before acting. A record that names no evidence (a `path:line`, a `brain#id`, a commit, or a command with what it printed) is rejected, and one bad record rejects the whole return rather than being quietly dropped. The standing instructions make this a boundary rule: an uncited claim does not cross from a subagent to its parent, or from one session to the next.
 
 ## Slash commands (Claude Code)
 

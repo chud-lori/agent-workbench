@@ -80,7 +80,10 @@ Close the reply with a machine-checkable block:
 
 `failure` is the concrete input and the wrong result, not a worry. `confidence`
 is `verified` when you read the code path, `suspected` when it needs a test to
-settle. An empty `records` list is legal and is how you say "no findings" — this
+settle. Cite each finding with `path`, `brain_id`, or the `command` you ran and
+what it printed; a finding with none is rejected. Add `verified_against`
+(`repo@ref sha`, or `local checkout only`) when the checkout might not be the
+deployed branch. An empty `records` list is legal and is how you say "no findings" — this
 is the one agent for which finding nothing is a real answer. The parent validates
 with `harness/agents/validate_return.py adversary -`.
 
@@ -100,11 +103,13 @@ with `harness/agents/validate_return.py adversary -`.
   },
   "evidence_any_of": [
     "path",
-    "brain_id"
+    "brain_id",
+    "command"
   ],
   "optional": [
     "severity",
-    "gotcha"
+    "gotcha",
+    "verified_against"
   ],
   "allow_empty": true
 }
