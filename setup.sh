@@ -301,7 +301,9 @@ fi
 if [ "$DO_CLAUDE" = "y" ]; then
   step "Companion plugins (optional)"
   if command -v node >/dev/null 2>&1 && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 18 ]; then
-    if ask "Install caveman (concise agent output, github.com/JuliusBrussee/caveman)?" "n"; then
+    if grep -q '"caveman@' "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null; then
+      info "caveman: already installed - skipped."
+    elif ask "Install caveman (concise agent output, github.com/JuliusBrussee/caveman)?" "n"; then
       # Run from $HOME: with a repo as CWD the installer also writes per-repo
       # .agents/ rule files into it. Its Gemini step prompts for trust, so a
       # closed stdin hangs it — keep this step interactive-only (ask already
@@ -309,7 +311,9 @@ if [ "$DO_CLAUDE" = "y" ]; then
       (cd "$HOME" && curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash) \
         && info "caveman installed." || info "caveman install failed - re-run its installer manually."
     fi
-    if ask "Install the security-audit skill (multi-phase codebase audit, github.com/cloudflare/security-audit-skill)?" "n"; then
+    if [ -e "$HOME/.claude/skills/security-audit/SKILL.md" ]; then
+      info "security-audit: already installed - skipped."
+    elif ask "Install the security-audit skill (multi-phase codebase audit, github.com/cloudflare/security-audit-skill)?" "n"; then
       # Installs to ~/.agents/skills (the skills CLI's own universal dir) and
       # symlinks into ~/.claude/skills. One target may report that it does not
       # support global installs; the rest still succeed.
@@ -359,8 +363,14 @@ fi
 
 # --- Code index ------------------------------------------------------------------
 step "Code index"
-info "index roots: \${AGENT_WORKBENCH_REPO_ROOT:-~/repo} (override via env before re-running)"
-if ask "Build/refresh the code index now?" "y"; then
+ROOTS=$(cd "$WORKBENCH" && python3 -c 'from agent_workbench.config import DEFAULT_INDEX_ROOTS as r; print(", ".join(str(p) for p in r))')
+info "index roots: $ROOTS (set AGENT_WORKBENCH_INDEX_ROOTS before re-running to change them)"
+if [ -f "$WORKBENCH/.state/index.sqlite" ]; then
+  # A refresh only re-reads changed files; a rebuild would drop and re-read everything.
+  if ask "Refresh the existing code index (changed files only)?" "y"; then
+    python3 "$WORKBENCH/run_cli.py" refresh-index
+  fi
+elif ask "Build the code index now?" "y"; then
   python3 "$WORKBENCH/run_cli.py" index
 fi
 
