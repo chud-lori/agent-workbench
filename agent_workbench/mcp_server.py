@@ -211,7 +211,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         },
     },
     "rebuild_code_index": {
-        "description": "Rebuild the local SQLite FTS code/product index. Defaults to ~/repo (override with roots or AGENT_WORKBENCH_INDEX_ROOTS). Writes only to the Agent Workbench .state directory.",
+        "description": "Rebuild the local SQLite FTS code/product index. Defaults to the configured index roots (AGENT_WORKBENCH_INDEX_ROOTS, else .state/index-roots, else ~/repo). Writes only to the Agent Workbench .state directory.",
         "inputSchema": {
             "type": "object",
             "properties": {"roots": {"type": "array", "items": {"type": "string"}}},
@@ -219,7 +219,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         },
     },
     "refresh_code_index": {
-        "description": "Incrementally refresh the local SQLite FTS code/product index (defaults to ~/repo), skipping unchanged files.",
+        "description": "Incrementally refresh the local SQLite FTS code/product index (defaults to the configured index roots), skipping unchanged files; a new root is added alongside existing repos.",
         "inputSchema": {
             "type": "object",
             "properties": {"roots": {"type": "array", "items": {"type": "string"}}},

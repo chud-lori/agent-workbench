@@ -34,9 +34,37 @@ CLAUDE_HOME = _path_from_env("AGENT_WORKBENCH_CLAUDE_HOME", HOME / ".claude")
 WORK_MCP_ROOT = _path_from_env("AGENT_WORKBENCH_WORK_MCP_ROOT", CLONE_PARENT / "work-mcp")
 # Beside the clone, so moving the clone moves its state with it.
 WORKBENCH_HOME = _path_from_env("AGENT_WORKBENCH_STATE_DIR", CLONE_ROOT / ".state")
-# Code index scans only the repo root by default. Override with
-# AGENT_WORKBENCH_INDEX_ROOTS (colon- or comma-separated paths).
-DEFAULT_INDEX_ROOTS = _paths_from_env("AGENT_WORKBENCH_INDEX_ROOTS", [DEFAULT_REPO_ROOT])
+
+
+def index_roots_file(state_dir: Path = WORKBENCH_HOME) -> Path:
+    return state_dir / "index-roots"
+
+
+def load_index_roots(state_dir: Path = WORKBENCH_HOME) -> tuple[Path, ...]:
+    """Index roots from AGENT_WORKBENCH_INDEX_ROOTS, else the saved list, else the repo root."""
+    if os.environ.get("AGENT_WORKBENCH_INDEX_ROOTS"):
+        return _paths_from_env("AGENT_WORKBENCH_INDEX_ROOTS", [])
+    try:
+        lines = index_roots_file(state_dir).read_text().splitlines()
+    except OSError:
+        lines = []
+    saved = tuple(Path(line.strip()).expanduser() for line in lines if line.strip() and not line.startswith("#"))
+    return saved or (DEFAULT_REPO_ROOT,)
+
+
+def save_index_roots(roots: list[str], state_dir: Path = WORKBENCH_HOME) -> tuple[Path, ...]:
+    """Add roots to the saved list, keeping existing ones and their order."""
+    merged = list(load_index_roots(state_dir))
+    for item in roots:
+        path = Path(item.strip()).expanduser()
+        if item.strip() and path not in merged:
+            merged.append(path)
+    state_dir.mkdir(parents=True, exist_ok=True)
+    index_roots_file(state_dir).write_text("".join(f"{p}\n" for p in merged))
+    return tuple(merged)
+
+
+DEFAULT_INDEX_ROOTS = load_index_roots()
 
 
 @dataclass(frozen=True)

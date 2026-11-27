@@ -48,11 +48,11 @@ def main(argv: list[str] | None = None) -> int:
     service.add_argument("--json", action="store_true")
 
     index = sub.add_parser("index", help="Rebuild local code/product index")
-    index.add_argument("roots", nargs="*", help="Optional roots to index; defaults to ~/repo (or AGENT_WORKBENCH_INDEX_ROOTS)")
+    index.add_argument("roots", nargs="*", help="Optional roots to index; defaults to the configured index roots")
     index.add_argument("--json", action="store_true")
 
     refresh = sub.add_parser("refresh-index", help="Incrementally refresh local code/product index")
-    refresh.add_argument("roots", nargs="*", help="Optional roots to refresh; defaults to ~/repo (or AGENT_WORKBENCH_INDEX_ROOTS)")
+    refresh.add_argument("roots", nargs="*", help="Optional roots to refresh; defaults to the configured index roots")
     refresh.add_argument("--json", action="store_true")
 
     status = sub.add_parser("index-status", help="Show code index freshness")
