@@ -16,9 +16,13 @@
 #   {"hooks": {"Stop": [{"hooks": [{"type": "command",
 #     "command": "bash <WORKBENCH>/harness/hooks/stop-memory-checkpoint.sh"}]}]}}
 
+WORKBENCH="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" || exit 0
+. "$WORKBENCH/harness/hooks/lib/hook-input.sh" || exit 0
+read_hook_input
+
 # The heredoc is python's stdin (the program), so the hook payload travels
 # via an environment variable rather than a pipe.
-HOOK_PAYLOAD="$(cat)" python3 - <<'EOF' 2>/dev/null || true
+python3 - <<'EOF' 2>/dev/null || true
 import json
 import os
 import sys

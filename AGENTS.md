@@ -102,13 +102,13 @@ python3 "$WORKBENCH/run_cli.py" index
 
 Set the env vars in your shell profile if you change the defaults; the MCP server reads them at launch. Without `AGENT_WORKBENCH_INDEX_ROOTS`, the roots come from `.state/index-roots` (one path per line), which setup.sh appends to when you add folders, and fall back to the repo root. `refresh-index` with a new root adds it alongside the repos already indexed, and drops repos under the refreshed roots that are gone from disk; `index` rebuilds everything from scratch.
 
-**4. Install the SessionStart hook (Claude Code):** auto-injects the 5 most recent brain notes into every session's context, self-updates the workbench (background `git pull --ff-only`, only on a clean working tree), and refreshes the code index in the background. The matcher includes `resume|compact` so the brain **re-primes after a context compaction** instead of fading mid-session. Add to `~/.claude/settings.json` (replace `<WORKBENCH>` with your clone path):
+**4. Install the SessionStart hook (Claude Code):** records the session (`session_id`, repo, branch, `started_at`) in `.state/ledger.sqlite`, auto-injects the 5 most recent brain notes into every session's context, self-updates the workbench (background `git pull --ff-only`, only on a clean working tree), and refreshes the code index in the background. The matcher includes `resume|compact` so the brain **re-primes after a context compaction** instead of fading mid-session. Add to `~/.claude/settings.json` (replace `<WORKBENCH>` with your clone path):
 
 ```json
 {"hooks": {"SessionStart": [{"matcher": "startup|resume|compact", "hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/session-start.sh"}]}]}}
 ```
 
-The script resolves the workbench root from its own location, prints nothing if the brain is empty, and always exits 0 so it can never break session start. (All the hook snippets here are what `harness/install_hooks.py` writes for you.)
+The script resolves the workbench root from its own location, prints nothing if the brain is empty, and always exits 0 so it can never break session start. A resumed or compacted session re-registers under the same `session_id`, keeping its first `started_at`. Nothing reads the ledger yet. Every hook reads its stdin through `harness/hooks/lib/hook-input.sh`, which sets `HOOK_PAYLOAD` and `HOOK_SESSION_ID`, so no hook parses `session_id` on its own. (All the hook snippets here are what `harness/install_hooks.py` writes for you.)
 
 **5. Install the Stop hook (Claude Code):** enforces the "store durable knowledge" instruction instead of leaving it to model judgment. At every turn end it blocks the stop once and tells the model to save any decisions, gotchas, run results, or new conventions from the turn with `brain_remember` (or end immediately if nothing durable was learned). The `stop_hook_active` flag guarantees it can never loop, and the script always exits 0.
 
@@ -313,7 +313,7 @@ Regression tests live in `tests/test_worktree.py` and build a real worktree.
 ## Project conventions (when editing this repo)
 
 - Python ≥3.10, stdlib only — do not add dependencies. `tomllib` is 3.11+, so it is imported through `util.load_toml()`, which raises a named reason on 3.10; callers must report that they could not read a file rather than reporting it as absent (`tests/test_portability.py` guards this).
-- State lives in `.state/` (`index.sqlite`, `brain.sqlite`); never commit it.
+- State lives in `.state/` (`index.sqlite`, `brain.sqlite`, `ledger.sqlite`); never commit it.
 - Shell hooks in `harness/git-hooks/` are POSIX `sh`, not bash, and are matched with `grep -E` — write alternations as `a|b`, never `a\|b` (inside `-E` that is a literal pipe, which once silently disabled the whole vendor list).
 - Index roots come from `AGENT_WORKBENCH_INDEX_ROOTS` (colon/comma-separated), else `.state/index-roots`, else `~/repo`; explicit `roots` args override all three. Doctor intentionally also scans the projects root, which defaults to the clone's parent directory.
 - Smoke test after changes: pipe `initialize` + `tools/list` JSON-RPC lines into `run_mcp.py` and check the reply.
