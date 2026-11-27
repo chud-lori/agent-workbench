@@ -114,7 +114,7 @@ The script resolves the workbench root from its own location, prints nothing if 
 {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/stop-memory-checkpoint.sh"}]}]}}
 ```
 
-**6. Install the UserPromptSubmit hook (Claude Code):** approximates involuntary human recall. On every user prompt it FTS-matches the prompt against brain notes and injects up to 5 one-line hits (ids + hooks) into the turn's context; full bodies stay pull-based via `brain_recall`. Threshold-gated — trivial prompts ("yes", "go") inject nothing — and always exits 0.
+**6. Install the UserPromptSubmit hook (Claude Code):** approximates involuntary human recall. On every user prompt it FTS-matches the prompt against brain notes and injects up to 5 one-line hits (ids + hooks) into the turn's context; full bodies stay pull-based via `brain_recall`. Trivial prompts ("yes", "go") inject nothing, and a hit must clear `prompt_recall.RELEVANCE_FLOOR`: its bm25 score divided by `sqrt(distinct prompt terms) * ln(note count)`, so long prompts and large brains are not favoured and conversational filler stays under the floor. Within one session (keyed on the hook's `session_id`) a note is injected once and only again on a stronger match; that state is `.state/prompt-recall-sessions.json`, dropped after 24 hours and capped at the 50 newest sessions. It then injects the rules whose scope matches the working directory's `repo:` and `branch:` (plus global rules). Always exits 0.
 
 ```json
 {"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/prompt-recall.sh"}]}]}}
@@ -213,7 +213,7 @@ Scope and trigger are stored on the rule as text, because that is what a human r
 
 **There is deliberately no `applied` outcome.** Whether the model truly obeyed a rule is self-reported, and self-reported compliance is not evidence. What can be measured is that a rule was surfaced and that the user still had to correct the output.
 
-`prompt-recall.sh` injects the rules in force on every prompt, next to the note hits. Unlike note recall it is not threshold-gated, because a rule is already scoped to where it belongs, and a one-word prompt is exactly where an unrepeated rule gets forgotten.
+`prompt-recall.sh` injects the rules in force on every prompt, next to the note hits. It matches on **scope only**: the hook knows `repo:` and `branch:` from the working directory, so it injects global rules and rules every one of whose keys is among those. Trigger words are not used there, because common words fired `task:` and `workstream:` rules on unrelated prompts; triggers still apply when `brain_rules_in_force` is called with a `prompt`. Unlike note recall it is not threshold-gated, because a one-word prompt is exactly where an unrepeated rule gets forgotten.
 
 **14. Transcript retention (Claude Code):** setup.sh sets `cleanupPeriodDays: 3650` in `~/.claude/settings.json` when unset. Claude Code otherwise prunes `~/.claude/projects` after **30 days**, silently deleting session history on a rolling basis. An existing value is left alone.
 

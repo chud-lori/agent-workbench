@@ -190,6 +190,13 @@ Two layers, with different guarantees:
   and kicks `refresh-index` as a detached background process. Resolves the workbench
   root from its own path, is best-effort at every step, and always exits 0 so it can
   never break session start.
+- `harness/hooks/prompt-recall.sh`, wired as `UserPromptSubmit`: passes the prompt
+  and `session_id` to `recall-brief`, which (`prompt_recall.py`) keeps a note only
+  when `-bm25 / (sqrt(distinct terms) * ln(note count))` clears `RELEVANCE_FLOOR`
+  and this session has not already been shown it at that strength or more
+  (`.state/prompt-recall-sessions.json`, 24-hour expiry, 50 sessions max). Then
+  `rules-brief` injects global rules and rules whose scope keys are all among the
+  working directory's `repo:` and `branch:`; trigger words are not consulted.
 
 **Prompt-scoped (Claude Code only).**
 - `harness/skills/*/SKILL.md` — symlinked into `~/.claude/skills/`. Skills answer
