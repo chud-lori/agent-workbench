@@ -9,7 +9,7 @@ from .code_index import code_search, codebase_overview, index_status, rebuild_in
 from .config import WorkbenchConfig, default_config
 from .knowledge import brief_task, context_for_path, find_service_context, search_knowledge
 from .mcp_server import serve
-from .prompt_recall import prompt_hits
+from .prompt_recall import pop_spawn_prompt, prompt_hits, stash_spawn_prompt
 from .repo_state import repo_state
 from .rules import context_view, remember_rule, rule_feedback, rules_in_force
 from .scanners import doctor_report, format_report, mcp_health, report_json
@@ -130,6 +130,10 @@ def main(argv: list[str] | None = None) -> int:
     recall_brief_cmd.add_argument("prompt")
     recall_brief_cmd.add_argument("--session", default=None, help="Hook session_id; a note is not repeated within it")
 
+    sub.add_parser(
+        "subagent-brief", help="Read a PreToolUse(Agent) or SubagentStart hook payload on stdin (used by the subagent hook)"
+    )
+
     repo_state_cmd = sub.add_parser("repo-state", help="Show a repo's branch/divergence vs origin/main")
     repo_state_cmd.add_argument("repo")
 
@@ -217,6 +221,12 @@ def main(argv: list[str] | None = None) -> int:
         brief_text = _recall_brief(args.prompt, config, args.session)
         if brief_text:
             print(brief_text)
+    elif args.command == "subagent-brief":
+        import sys
+
+        output = _subagent_brief(sys.stdin.read(), config)
+        if output:
+            print(output)
     elif args.command == "rule":
         print(dump_json(remember_rule(args.statement, args.scope, args.why, args.example, args.trigger, args.source, config)))
     elif args.command == "rules":
@@ -315,6 +325,40 @@ def _recall_brief(prompt: str, config: WorkbenchConfig, session_id: str | None =
         project = note.get("project") or "-"
         lines.append(f"- [{note.get('kind', 'note')}#{note.get('id', '?')}] ({project}) {content}")
     return "\n".join(lines)
+
+
+SUBAGENT_CONTEXT_CHARS = 2000
+
+
+def _subagent_brief(payload_text: str, config: WorkbenchConfig) -> str:
+    """Stash the Agent prompt on PreToolUse; on SubagentStart, return its recall as hook JSON."""
+    import json
+
+    try:
+        payload = json.loads(payload_text)
+    except ValueError:
+        return ""
+    if not isinstance(payload, dict) or not isinstance(payload.get("session_id"), str):
+        return ""
+    session_id = payload["session_id"]
+    event = payload.get("hook_event_name")
+    if event == "PreToolUse":
+        tool_input = payload.get("tool_input")
+        if isinstance(tool_input, dict) and isinstance(tool_input.get("prompt"), str):
+            agent_type = tool_input.get("subagent_type") or "general-purpose"
+            stash_spawn_prompt(session_id, str(agent_type), tool_input["prompt"], config)
+        return ""
+    if event != "SubagentStart":
+        return ""
+    prompt = pop_spawn_prompt(session_id, str(payload.get("agent_type") or ""), config)
+    if not prompt:
+        return ""
+    # No session dedupe: the subagent has not seen what the parent was shown.
+    parts = [part for part in (_recall_brief(prompt, config), _rules_brief(config)) if part]
+    if not parts:
+        return ""
+    context = "\n".join(parts)[:SUBAGENT_CONTEXT_CHARS]
+    return json.dumps({"hookSpecificOutput": {"hookEventName": "SubagentStart", "additionalContext": context}})
 
 
 def _format_activity(report: dict) -> str:

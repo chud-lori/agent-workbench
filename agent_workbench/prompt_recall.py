@@ -87,3 +87,49 @@ def _unseen(hits: list[dict[str, Any]], session_id: str, config: WorkbenchConfig
     except OSError:
         pass
     return fresh
+
+
+SPAWN_DIR = "spawn-prompts"
+SPAWN_TTL_SECONDS = 120
+
+
+def stash_spawn_prompt(session_id: str, agent_type: str, prompt: str, config: WorkbenchConfig | None = None) -> None:
+    """Keep an Agent call's prompt until its SubagentStart, whose payload carries no prompt."""
+    config = config or default_config()
+    spawn_dir = config.workbench_home / SPAWN_DIR
+    try:
+        spawn_dir.mkdir(parents=True, exist_ok=True)
+        path = spawn_dir / f"{time.time_ns()}-{os.getpid()}.json"
+        path.write_text(json.dumps({"session": session_id, "type": agent_type, "prompt": prompt}))
+    except OSError:
+        pass
+
+
+def pop_spawn_prompt(session_id: str, agent_type: str, config: WorkbenchConfig | None = None) -> str:
+    """Claim the oldest stashed prompt for this session, preferring one of the same agent type."""
+    config = config or default_config()
+    spawn_dir = config.workbench_home / SPAWN_DIR
+    try:
+        names = sorted(spawn_dir.iterdir())
+    except OSError:
+        return ""
+    now = time.time()
+    candidates = []
+    for path in names:
+        try:
+            if now - path.stat().st_mtime > SPAWN_TTL_SECONDS:
+                path.unlink()
+                continue
+            entry = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(entry, dict) and entry.get("session") == session_id:
+            candidates.append((entry.get("type") != agent_type, path, str(entry.get("prompt") or "")))
+    # Unlinking is the claim, so two parallel spawns never take the same prompt.
+    for _, path, prompt in sorted(candidates, key=lambda c: c[0]):
+        try:
+            path.unlink()
+        except OSError:
+            continue
+        return prompt
+    return ""

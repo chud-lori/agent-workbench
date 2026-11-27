@@ -197,6 +197,13 @@ Two layers, with different guarantees:
   (`.state/prompt-recall-sessions.json`, 24-hour expiry, 50 sessions max). Then
   `rules-brief` injects global rules and rules whose scope keys are all among the
   working directory's `repo:` and `branch:`; trigger words are not consulted.
+- `harness/hooks/subagent-recall.sh`, wired as `PreToolUse` (matcher `Agent`) and
+  `SubagentStart`, through the `subagent-brief` CLI command. The first stashes the
+  spawn prompt in `.state/spawn-prompts/` and prints nothing; the second claims it
+  (unlinking the file is the claim, so parallel starts never share one) and returns
+  `recall-brief` without session dedupe plus `rules-brief` as `additionalContext`,
+  capped at 2000 characters. The stash exists because the `SubagentStart` payload
+  has no prompt.
 
 **Prompt-scoped (Claude Code only).**
 - `harness/skills/*/SKILL.md` — symlinked into `~/.claude/skills/`. Skills answer
@@ -212,11 +219,12 @@ Two layers, with different guarantees:
   behaviour that should be opt-in per turn, where a hook would fire on every turn
   in every project. `/say` is the first.
 - `harness/agents/*.md` — symlinked into `~/.claude/agents/`. A subagent receives
-  **no** hooks (a spawn is neither a session start nor a user prompt) and none of
-  the parent's context, so recall must live in its own system prompt: `scout`
-  recalls before searching, `implementer` recalls conventions before editing,
-  `adversary` recalls known failure modes before reviewing. There is no
-  subagent-spawn hook point, so this is the only lever available.
+  no SessionStart or UserPromptSubmit hooks (a spawn is neither a session start
+  nor a user prompt) and none of the parent's context. `subagent-recall.sh` gives
+  it the notes matching its spawn prompt once, at start; recall that follows the
+  task as it unfolds must live in its own system prompt: `scout` recalls before
+  searching, `implementer` recalls conventions before editing, `adversary` recalls
+  known failure modes before reviewing.
   `implementer` has no spawn tool and is told never to request its own review:
   the parent runs `adversary` on the diff without the implementer's summary, so
   the review is not anchored on the author's framing.
