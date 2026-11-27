@@ -7,14 +7,20 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 SKILLS = sorted((REPO / "harness" / "skills").glob("*/SKILL.md"))
 
+CONVENTION = REPO / "harness" / "skills" / "fan-out-and-verify.md"
+POINTER = "~/.config/agent-workbench/fan-out-and-verify.md"
+EVIDENCE_SKILLS = ("standup", "brain-harvest", "postmortem", "why", "meeting-prep")
+
 # A skill that shells out to one of these depends on something setup.sh cannot
 # install for the user.
 EXTERNAL = re.compile(r"^\s*(?:`|\$\()?(gh|npx|node)\s", re.M)
-DEGRADES = re.compile(
-    r"skip it and \*\*say so|missing source|unavailable|skipped and called out"
-    r"|say so in|absent or unauthenticated|not installed",
-    re.I,
-)
+DEGRADES = "absent or unauthenticated"
+
+
+def in_force(path: Path) -> str:
+    """The skill as the model reads it: its own text plus the convention it points at."""
+    text = path.read_text()
+    return text + CONVENTION.read_text() if POINTER in text else text
 
 
 class SkillContractTests(unittest.TestCase):
@@ -40,11 +46,11 @@ class SkillContractTests(unittest.TestCase):
 
     def test_a_skill_using_external_tools_says_what_happens_without_them(self) -> None:
         for path in SKILLS:
-            text = path.read_text()
+            text = in_force(path)
             if EXTERNAL.search(text):
-                self.assertRegex(
-                    text,
+                self.assertIn(
                     DEGRADES,
+                    text,
                     f"{path.parent.name} calls an external tool but never says what to do "
                     "when it is missing, so the user gets a thin answer with no warning",
                 )
@@ -53,8 +59,27 @@ class SkillContractTests(unittest.TestCase):
         # A loose name match handed to several agents gives every one the wrong set.
         step = "**Resolve exact keys first.** Before searching in parallel or briefing a subagent"
         for name in ("standup", "postmortem", "why", "meeting-prep", "brain-harvest", "pr-review"):
-            text = (REPO / "harness" / "skills" / name / "SKILL.md").read_text()
+            text = in_force(REPO / "harness" / "skills" / name / "SKILL.md")
             self.assertIn(step, text, f"{name} fans out without resolving exact keys first")
+
+    def test_evidence_skills_point_at_the_convention_instead_of_restating_it(self) -> None:
+        # Five inline copies drifted into five phrasings; one file keeps them one convention.
+        convention = CONVENTION.read_text()
+        for name in EVIDENCE_SKILLS:
+            text = (REPO / "harness" / "skills" / name / "SKILL.md").read_text()
+            self.assertIn(f"**Read `{POINTER}` before gathering.**", text, name)
+            self.assertNotIn("**Resolve exact keys first.**", text, f"{name} restates the convention")
+            self.assertNotIn("U0…", text, f"{name} restates the Slack id rule")
+        for rule in ("Resolve exact keys first", "in parallel", DEGRADES, "U0…",
+                     "Verify before presenting", "Cite a surface", "Do not store the output"):
+            self.assertIn(rule, convention, f"the convention lost: {rule}")
+
+    def test_convention_pointer_matches_what_setup_installs(self) -> None:
+        # A pointer to a path setup.sh does not write is worse than no pointer.
+        installed = POINTER.removeprefix("~/.config/")
+        for script in ("setup.sh", "uninstall.sh"):
+            self.assertIn(installed, (REPO / script).read_text(), script)
+        self.assertIn('"$WORKBENCH/harness/skills/fan-out-and-verify.md"', (REPO / "setup.sh").read_text())
 
     def test_voice_stores_through_the_rule_engine_rather_than_its_own_profile(self) -> None:
         """The decision that kept /voice from duplicating the rule engine.

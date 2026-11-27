@@ -152,7 +152,7 @@ mkdir -p ~/.claude/skills && ln -s "$WORKBENCH/harness/skills/standup" ~/.claude
 
 Degrades cleanly: any missing source is skipped and called out, since a silently absent source reads as "nothing happened there."
 
-**10. Install the evidence skills (Claude Code):** four more skills follow the same fan-out-and-verify pattern as `/standup` — resolve named people, repos and tickets to exact keys, gather from every source in parallel, verify threads before presenting, cite a surface for every line:
+**10. Install the evidence skills (Claude Code):** four more skills follow the same fan-out-and-verify pattern as `/standup` — resolve named people, repos and tickets to exact keys, gather from every source in parallel, verify threads before presenting, cite a surface for every line. That convention is written once, in `harness/skills/fan-out-and-verify.md`, which setup.sh copies to `~/.config/agent-workbench/fan-out-and-verify.md`; `/standup`, `/brain-harvest`, `/postmortem`, `/why` and `/meeting-prep` point at it and keep only the prose where they differ. Re-run setup.sh after editing it, since the installed file is a copy:
 
 - `/postmortem` — reconstruct an incident from Slack + `recent_activity` + deploys + PRs + tickets into a timeline (cause introduced → detected → mitigated → resolved), a blameless five-whys, and a draft with owned action items. Ends by *proposing* one root-cause `gotcha` for the brain — approval-gated.
 - `/why` — code archaeology: climb blame → commit → PR → ticket → Slack → brain to answer "why does this code exist", with a cited evidence chain and an honest "no recorded reason survives" when the chain dead-ends.
@@ -284,7 +284,7 @@ The MCP server, the hooks, the skills and the agent types install from this repo
 | `node` ≥ 18 | the companion plugins and skills offered at setup | those offers are skipped |
 | Slack / Atlassian / calendar MCPs | the non-git sources in the evidence skills | that source is skipped |
 
-**Every skill that reaches for one of these must say so when it is missing.** A silently absent source reads as "nothing happened there", which is the failure the whole evidence pattern exists to avoid. `tests/test_skill_contract.py` enforces it: a skill that calls an external tool without documenting the degraded path fails the suite, as does a `setup.sh` that stops reporting these.
+**Every skill that reaches for one of these must say so when it is missing.** A silently absent source reads as "nothing happened there", which is the failure the whole evidence pattern exists to avoid. `tests/test_skill_contract.py` enforces it: a skill that calls an external tool without saying, in its own text or in the convention it points at, what happens when the tool is absent or unauthenticated fails the suite, as does a `setup.sh` that stops reporting these.
 
 ## Measuring the brain (blind replay)
 

@@ -25,9 +25,7 @@ Watch the weekend and the boundary:
 
 ## 2. Gather — all sources, in parallel
 
-**Resolve exact keys first.** Before searching in parallel or briefing a subagent, resolve each named person, repo, ticket and channel to an exact key (account id, author email, `org/repo`, ticket key, channel id), say how you confirmed it, and use only that key in every search and brief, never a looser name match. If a key returns a different count than the name did, find out why before going on.
-
-Run these concurrently. If a source is unavailable (gh unauthenticated, an MCP absent), skip it and **say so in the summary** — a silently missing source reads as "nothing happened there."
+**Read `~/.config/agent-workbench/fan-out-and-verify.md` before gathering.** It holds the convention every evidence skill shares: resolve exact keys first, gather in parallel, name any source that is absent or unauthenticated, never surface raw Slack ids, verify before presenting, cite a surface for every line, and do not store the output.
 
 **Git — commits across every local repo** (`agent-workbench` MCP, no network):
 
@@ -50,7 +48,6 @@ gh search prs --review-requested @me --updated YYYY-MM-DD --json number,title,re
 
 - `slack_search_messages("from:me on:YYYY-MM-DD")`. Use `from:me` — searching by handle or email does not work. Always bound with `on:`; a bare `after:` returns newest-first, caps results, and **silently drops the earlier day**.
 - `from:me` returns only *your* messages, which is half a conversation. Decisions, approvals, and pushback from others are the half that matters — follow up with `slack_get_thread_replies` on threads that look like decisions, and `slack_get_channel_history` for DMs (`D…` ids surface in search results; there is no "list my DMs").
-- **Never surface raw user IDs (U0…).** Resolve to real names with `slack_get_user` before quoting or summarizing anyone.
 
 **Calendar — where the hours went:**
 
@@ -70,10 +67,8 @@ Not an activity log, but notes stored that day often carry the *why* behind a co
 
 ## 3. Verify before presenting
 
-**Never present a raw search as fact.** `from:me` shows what *you claimed*, not what was agreed. Before a line goes in:
+`from:me` shows what *you claimed*, not what was agreed: confirm in the thread who actually decided, and whether your proposal was accepted or is still open. Also:
 
-- Read the thread. Confirm who actually decided, and whether your proposal was accepted or is still open.
-- The two failure modes are **misattribution** (crediting the wrong person for a decision) and **stale claims** (reporting as done something still under discussion). The thread is the source of truth; your sent messages are not.
 - If `recent_activity` reports commits on a branch, that is not the same as shipped. Check whether it merged before putting it in Done.
 
 ## 4. Format
@@ -84,8 +79,8 @@ Group by **initiative, not by channel or repo** — the team cares about the wor
 - **Today** — next actions
 - **Blockers / waiting** — who or what you're waiting on, and the open question
 
-Keep it paste-ready and plain. Cite a surface for every Done line so anyone can trace it.
+Keep it paste-ready and plain.
 
 ## 5. This is personal — do not store it
 
-A standup is a summary of one day, not durable knowledge. **Do not `brain_remember` the standup itself**, and do not promote it to shared references. If the day surfaced something genuinely durable — a root cause, a decision with a why, a gotcha — that is a normal `brain_remember` with its own source reference, separate from the standup.
+A standup is a summary of one day; the convention's storage rule applies as written.

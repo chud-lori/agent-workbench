@@ -87,6 +87,11 @@ if [ -f "$RULES_DST" ]; then
   rm "$RULES_DST"
   info "removed $RULES_DST."
 fi
+FANOUT_DST="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/fan-out-and-verify.md"
+if [ -f "$FANOUT_DST" ]; then
+  rm "$FANOUT_DST"
+  info "removed $FANOUT_DST."
+fi
 DISCIPLINE_DST="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/coding-discipline.md"
 if [ -f "$DISCIPLINE_DST" ]; then
   rm "$DISCIPLINE_DST"
