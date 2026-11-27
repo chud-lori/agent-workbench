@@ -8,6 +8,7 @@ from .brain import amend, export, forget, promote, recall, remember, resolve
 from .code_index import code_search, codebase_overview, index_status, rebuild_index, refresh_index
 from .config import WorkbenchConfig, default_config
 from .knowledge import brief_task, context_for_path, find_service_context, search_knowledge
+from .ledger import register_session
 from .mcp_server import serve
 from .prompt_recall import prompt_hits
 from .repo_state import repo_state
@@ -130,6 +131,12 @@ def main(argv: list[str] | None = None) -> int:
     recall_brief_cmd.add_argument("prompt")
     recall_brief_cmd.add_argument("--session", default=None, help="Hook session_id; a note is not repeated within it")
 
+    session_cmd = sub.add_parser(
+        "session-register", help="Record a session's repo and branch in the ledger (used by the SessionStart hook)"
+    )
+    session_cmd.add_argument("session_id")
+    session_cmd.add_argument("--cwd", default=".", help="Directory whose repo and branch to record")
+
     repo_state_cmd = sub.add_parser("repo-state", help="Show a repo's branch/divergence vs origin/main")
     repo_state_cmd.add_argument("repo")
 
@@ -229,6 +236,8 @@ def main(argv: list[str] | None = None) -> int:
         brief_text = _rules_brief(config)
         if brief_text:
             print(brief_text)
+    elif args.command == "session-register":
+        register_session(args.session_id, args.cwd, config)
     elif args.command == "repo-state":
         print(dump_json(repo_state(args.repo, config)))
     elif args.command == "activity":

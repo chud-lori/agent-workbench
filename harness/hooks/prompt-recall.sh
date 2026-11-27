@@ -15,34 +15,27 @@
 
 WORKBENCH="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" || exit 0
 
-# Extract .session_id (line 1) and .prompt (line 2) from the hook payload;
-# empty on any parse failure.
-parsed="$(HOOK_PAYLOAD="$(cat)" python3 - <<'EOF' 2>/dev/null || true
+. "$WORKBENCH/harness/hooks/lib/hook-input.sh" || exit 0
+read_hook_input
+
+# Extract .prompt from the hook payload; empty on any parse failure.
+prompt="$(python3 - <<'EOF' 2>/dev/null || true
 import json
 import os
-import re
 
 try:
     payload = json.loads(os.environ.get("HOOK_PAYLOAD", ""))
 except Exception:
     payload = {}
-if not isinstance(payload, dict):
-    payload = {}
-session_id = payload.get("session_id")
-prompt = payload.get("prompt")
-print(re.sub(r"[^A-Za-z0-9_-]", "", session_id)[:64] if isinstance(session_id, str) else "")
+prompt = payload.get("prompt") if isinstance(payload, dict) else None
 print(prompt[:400].replace("\n", " ") if isinstance(prompt, str) else "")
 EOF
 )"
-
-session_id="${parsed%%$'\n'*}"
-prompt="${parsed#*$'\n'}"
-[ "$prompt" = "$parsed" ] && prompt=""
 [ -z "$prompt" ] && exit 0
 
 # recall-brief prints nothing when no note clears the floor or every hit was
 # already shown this session; whatever it prints lands in this turn's context.
-python3 "$WORKBENCH/run_cli.py" recall-brief "$prompt" --session "$session_id" 2>/dev/null || true
+python3 "$WORKBENCH/run_cli.py" recall-brief "$prompt" --session "$HOOK_SESSION_ID" 2>/dev/null || true
 
 # Rules match on scope only and need no threshold: a one-word prompt is
 # exactly where an unrepeated rule gets forgotten.

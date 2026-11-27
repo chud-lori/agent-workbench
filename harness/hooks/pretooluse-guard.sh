@@ -23,10 +23,11 @@
 WORKBENCH="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" || exit 0
 PATTERNS_FILE="${AGENT_WORKBENCH_GUARD_PATTERNS:-$WORKBENCH/.state/guard-patterns.txt}"
 
-PAYLOAD="$(cat)"
-case "$PAYLOAD" in *commit*) ;; *) [ -s "$PATTERNS_FILE" ] || exit 0 ;; esac
+. "$WORKBENCH/harness/hooks/lib/hook-input.sh" || exit 0
+read_hook_input
+case "$HOOK_PAYLOAD" in *commit*) ;; *) [ -s "$PATTERNS_FILE" ] || exit 0 ;; esac
 
-HOOK_PAYLOAD="$PAYLOAD" GUARD_PATTERNS_FILE="$PATTERNS_FILE" GATES="$WORKBENCH/harness/gates/check_diff.py" python3 - <<'EOF' 2>/dev/null || true
+GUARD_PATTERNS_FILE="$PATTERNS_FILE" GATES="$WORKBENCH/harness/gates/check_diff.py" python3 - <<'EOF' 2>/dev/null || true
 import json
 import os
 import re

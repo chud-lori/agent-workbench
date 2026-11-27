@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Claude Code SessionStart hook for agent-workbench.
 #
-# Prints a compact block of recent brain notes to stdout (injected into the
-# session context) and kicks an incremental code-index refresh in the
-# background. A hook must never break session start: every step is
-# best-effort and the script always exits 0.
+# Records the session in .state/ledger.sqlite, prints a compact block of
+# recent brain notes to stdout (injected into the session context) and kicks
+# an incremental code-index refresh in the background. A hook must never
+# break session start: every step is best-effort and the script always exits 0.
 #
 # Install: ./setup.sh (or python3 harness/install_hooks.py). Registered with
 # matcher "startup|resume|compact" so the brain re-primes after a context
@@ -12,6 +12,14 @@
 
 # Resolve the workbench root from this script's own location (harness/hooks/ -> repo root).
 WORKBENCH="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" || exit 0
+. "$WORKBENCH/harness/hooks/lib/hook-input.sh" || exit 0
+read_hook_input
+
+# --- Session ledger ---------------------------------------------------------
+# Upserts by session_id, so resume and compact re-register the same session.
+if [ -n "$HOOK_SESSION_ID" ]; then
+    python3 "$WORKBENCH/run_cli.py" session-register "$HOOK_SESSION_ID" --cwd "$PWD" >/dev/null 2>&1 || true
+fi
 
 # --- Recent brain notes -----------------------------------------------------
 # Fetch up to 5 recent notes as JSON; on any failure print nothing for this

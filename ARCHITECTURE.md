@@ -14,9 +14,9 @@ capabilities: a searchable code/product index, a persistent cross-tool memory
 - **Deterministic retrieval, no LLM calls.** The workbench never talks to a model API.
   The harness LLM is the reasoning layer; the workbench returns the same output for the
   same input and state, every time.
-- **Local-first state.** All persistent state is two SQLite files under `.state/`
-  (`index.sqlite`, `brain.sqlite`). Nothing leaves the machine; backup is
-  `brain_export` to markdown.
+- **Local-first state.** All persistent state is SQLite under `.state/`:
+  `index.sqlite`, `brain.sqlite`, and `ledger.sqlite` for in-flight session rows.
+  Nothing leaves the machine; backup is `brain_export` to markdown.
 - **No credentials.** Connector secrets (Slack tokens, Google OAuth, Atlassian auth)
   live in their own sidecar MCPs (the work-mcp repo). The workbench only *reports*
   connector health (`work_sources_status`) — it detects whether a token file exists but
@@ -103,6 +103,15 @@ Per-repo metadata (dominant language by suffix count, present package files) fee
 | Migration | `_connect` detects a pre-porter or pre-`resolved_at` schema and rebuilds the table **preserving rowids**, so note ids stay stable across upgrades |
 | Backup | `export` dumps everything (including resolved) to markdown, grouped by project |
 
+### Session ledger (`ledger.py` → `.state/ledger.sqlite`)
+
+| Aspect | Implementation |
+|---|---|
+| Storage | `sessions(session_id primary key, repo, branch, started_at)` in its own file, not the brain: a session row lives for hours, a note is meant to last |
+| Writer | `session-start.sh` calls `session-register <session_id> --cwd "$PWD"`. `repo` is `git rev-parse --show-toplevel` and `branch` the current branch, both null outside a repo |
+| Resume / compact | an upsert on `session_id`: repo and branch are refreshed, `started_at` keeps the first registration, so a resumed or compacted session stays one row |
+| Readers | none yet. `transcript_path` is not recorded and rows are never garbage-collected; both wait for the first feature that reads the table |
+
 ### Contextual rules (`rules.py` → same `.state/brain.sqlite`)
 
 A note records *what is true*; a rule records *how to behave here*. They are not interchangeable, because the same situation needs different behaviour in different contexts.
@@ -185,8 +194,11 @@ Two layers, with different guarantees:
   `brain_recall` before re-deriving, `refresh_code_index` on stale warnings.
 
 **Hook-enforced (runs regardless of what the LLM decides).**
+- Every hook reads its stdin payload through `harness/hooks/lib/hook-input.sh`,
+  which sets `HOOK_PAYLOAD` and `HOOK_SESSION_ID` (the top-level `session_id`,
+  kept only when it is a plain `[A-Za-z0-9_-]{1,64}` token, else empty).
 - `harness/hooks/session-start.sh`, wired as a Claude Code `SessionStart` hook:
-  prints the 5 most recent brain notes to stdout (auto-injected into session context)
+  records the session in the ledger (below), prints the 5 most recent brain notes to stdout (auto-injected into session context)
   and kicks `refresh-index` as a detached background process. Resolves the workbench
   root from its own path, is best-effort at every step, and always exits 0 so it can
   never break session start.

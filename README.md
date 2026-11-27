@@ -49,7 +49,7 @@ Environment variables with defaults. Nothing is hardcoded to a particular machin
 | `AGENT_WORKBENCH_REPO_ROOT` | `~/repo` | Where your work repos live |
 | `AGENT_WORKBENCH_INDEX_ROOTS` | repo root | Roots to index (colon/comma-separated) |
 | `AGENT_WORKBENCH_PROJECTS_ROOT` | the directory holding the clone | Secondary root scanned by diagnostics and activity |
-| `AGENT_WORKBENCH_STATE_DIR` | `.state/` inside the clone | SQLite state location (index + brain). Moves with the clone |
+| `AGENT_WORKBENCH_STATE_DIR` | `.state/` inside the clone | SQLite state location (index, brain, session ledger). Moves with the clone |
 | `AGENT_WORKBENCH_WORK_MCP_ROOT` | `work-mcp/` beside the clone | Optional connector sidecar (see below) |
 | `AGENT_WORKBENCH_CLAUDE_HOME` / `_CODEX_HOME` | `~/.claude` / `~/.codex` | Harness config locations for diagnostics |
 
@@ -99,12 +99,12 @@ Standing instructions make an agent *likely* to use the brain. The hooks make mo
 
 | Event | Script | Does |
 |---|---|---|
-| `SessionStart` | `session-start.sh` | Prints up to five recent brain notes (trimmed, with ids) into the session. Matcher `startup\|resume\|compact`, so the brain re-primes after a context compaction. Then detaches a background job that refreshes the index and fast-forwards the clone with `git pull --ff-only`, but only when the working tree is clean |
+| `SessionStart` | `session-start.sh` | Records the session's `session_id`, repo, branch and start time in `.state/ledger.sqlite`; a resume or compact updates the same row. Prints up to five recent brain notes (trimmed, with ids) into the session. Matcher `startup\|resume\|compact`, so the brain re-primes after a context compaction. Then detaches a background job that refreshes the index and fast-forwards the clone with `git pull --ff-only`, but only when the working tree is clean |
 | `UserPromptSubmit` | `prompt-recall.sh` | FTS-matches the prompt and injects up to five one-line hits with ids; bodies stay pull-based via `brain_recall`. A hit must clear a relevance floor on its length- and brain-size-normalised bm25 score, so a generic prompt injects nothing, and a note already injected in the same session (keyed on `session_id`) is skipped unless it now matches more strongly. Then injects the rules whose scope matches the current repo and branch, plus global rules; trigger words are not used here |
 | `Stop` | `stop-memory-checkpoint.sh` | Blocks the stop once and tells the model to store anything durable from the turn. It cannot loop: the hook stays silent when the model is already continuing from its own previous block |
 | `PreToolUse` | `pretooluse-guard.sh` | Forces explicit human approval for Bash commands matching your regex patterns; the patterns file is per-machine and untracked, and a missing or empty file turns that half off. Also denies a `git commit` whose added lines fail a script-enforced Gate check (see below) |
 
-All four are best-effort by design and always exit zero. A hook that can break session start is worse than a hook that occasionally does nothing.
+All four read the hook's stdin through `harness/hooks/lib/hook-input.sh`, so each gets the same `session_id`. All four are best-effort by design and always exit zero. A hook that can break session start is worse than a hook that occasionally does nothing.
 
 ## Commit attribution guard
 
