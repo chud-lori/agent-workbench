@@ -21,6 +21,8 @@ push back on.
 
 ## 1. Load the project's memory first
 
+**Resolve exact keys first.** Before searching in parallel or briefing a subagent, resolve each named person, repo, ticket and channel to an exact key (account id, author email, `org/repo`, ticket key, channel id), say how you confirmed it, and use only that key in every search and brief, never a looser name match. If a key returns a different count than the name did, find out why before going on.
+
 Generic review advice is worthless next to a recorded convention. Before
 reading a single line of the diff:
 

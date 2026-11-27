@@ -15,6 +15,8 @@ Default: last **7 days**. The argument overrides: `/brain-harvest 14d`, `/brain-
 
 ## 2. Gather (run sources in parallel)
 
+**Resolve exact keys first.** Before searching in parallel or briefing a subagent, resolve each named person, repo, ticket and channel to an exact key (account id, author email, `org/repo`, ticket key, channel id), say how you confirmed it, and use only that key in every search and brief, never a looser name match. If a key returns a different count than the name did, find out why before going on.
+
 If a source is unavailable (gh unauthenticated, MCP absent), skip it and say so in the final summary — don't abort the harvest.
 
 **Merged PRs (gh CLI):**

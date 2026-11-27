@@ -27,6 +27,8 @@ Resolve the argument to `repo + file + line range`. A bare symbol name: find it 
 
 ## 3. Climb the chain
 
+**Resolve exact keys first.** Before searching in parallel or briefing a subagent, resolve each named person, repo, ticket and channel to an exact key (account id, author email, `org/repo`, ticket key, channel id), say how you confirmed it, and use only that key in every search and brief, never a looser name match. If a key returns a different count than the name did, find out why before going on.
+
 For each shaping commit, in parallel where possible:
 
 - **Commit → PR:** `gh api "repos/<org>/<repo>/commits/<sha>/pulls"` (quote the URL — unquoted `?`/`=` break zsh). The PR body and review comments are where the alternatives-considered live.

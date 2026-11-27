@@ -49,6 +49,13 @@ class SkillContractTests(unittest.TestCase):
                     "when it is missing, so the user gets a thin answer with no warning",
                 )
 
+    def test_every_fan_out_skill_resolves_exact_keys_first(self) -> None:
+        # A loose name match handed to several agents gives every one the wrong set.
+        step = "**Resolve exact keys first.** Before searching in parallel or briefing a subagent"
+        for name in ("standup", "postmortem", "why", "meeting-prep", "brain-harvest", "pr-review"):
+            text = (REPO / "harness" / "skills" / name / "SKILL.md").read_text()
+            self.assertIn(step, text, f"{name} fans out without resolving exact keys first")
+
     def test_voice_stores_through_the_rule_engine_rather_than_its_own_profile(self) -> None:
         """The decision that kept /voice from duplicating the rule engine.
 

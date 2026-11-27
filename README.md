@@ -129,7 +129,7 @@ The PreToolUse guard runs it when the agent runs `git commit` (`-a` includes uns
 
 ## Skills (Claude Code)
 
-Seven skills under `harness/skills/` share one pattern: gather from every work source in parallel, verify threads before presenting, cite a surface for every line. setup.sh symlinks them into `~/.claude/skills/`.
+Seven skills under `harness/skills/` share one pattern: resolve named people, repos and tickets to exact keys, gather from every work source in parallel, verify threads before presenting, cite a surface for every line. setup.sh symlinks them into `~/.claude/skills/`.
 
 - `/standup` - "what did I do yesterday?" from git, PRs, Slack, calendar, and brain notes, as paste-ready Done / Today / Blockers
 - `/brain-harvest` - weekly backfill: scan merged PRs, resolved tickets, and Slack for durable knowledge the hooks missed, deduped against existing notes and approval-gated

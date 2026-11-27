@@ -17,6 +17,8 @@ Establish three anchors before gathering — ask the user for whatever is missin
 
 ## 2. Gather — all sources, in parallel
 
+**Resolve exact keys first.** Before searching in parallel or briefing a subagent, resolve each named person, repo, ticket and channel to an exact key (account id, author email, `org/repo`, ticket key, channel id), say how you confirmed it, and use only that key in every search and brief, never a looser name match. If a key returns a different count than the name did, find out why before going on.
+
 Skip any unavailable source and **say so in the draft** — a silently missing source reads as "nothing happened there."
 
 **Slack — the human timeline:**

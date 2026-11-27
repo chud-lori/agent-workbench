@@ -152,7 +152,7 @@ mkdir -p ~/.claude/skills && ln -s "$WORKBENCH/harness/skills/standup" ~/.claude
 
 Degrades cleanly: any missing source is skipped and called out, since a silently absent source reads as "nothing happened there."
 
-**10. Install the evidence skills (Claude Code):** four more skills follow the same fan-out-and-verify pattern as `/standup` — gather from every source in parallel, verify threads before presenting, cite a surface for every line:
+**10. Install the evidence skills (Claude Code):** four more skills follow the same fan-out-and-verify pattern as `/standup` — resolve named people, repos and tickets to exact keys, gather from every source in parallel, verify threads before presenting, cite a surface for every line:
 
 - `/postmortem` — reconstruct an incident from Slack + `recent_activity` + deploys + PRs + tickets into a timeline (cause introduced → detected → mitigated → resolved), a blameless five-whys, and a draft with owned action items. Ends by *proposing* one root-cause `gotcha` for the brain — approval-gated.
 - `/why` — code archaeology: climb blame → commit → PR → ticket → Slack → brain to answer "why does this code exist", with a cited evidence chain and an honest "no recorded reason survives" when the chain dead-ends.
@@ -184,6 +184,16 @@ for a in "$WORKBENCH"/harness/agents/*.md; do ln -s "$a" ~/.claude/agents/"$(bas
 The parent's half of the job is a standing instruction: hand a subagent *evidence* (file:line, the snippet, `brain#id`), not conclusions it must re-derive.
 
 **An implementer does not review its own change.** Its `tools:` allowlist holds no `Agent` or `Task` tool and its prompt forbids asking for a reviewer, because a reviewer the author briefs checks the author's account rather than the code. The parent runs `adversary` itself with the diff, the task, and the project's gotchas, and leaves out the implementer's summary; the adversary sets such a summary aside if one reaches it. This is a convention the parent follows, not a mechanism: a session that calls both agents can still pass whatever context it likes. `tests/test_agent_types.py` fails if the implementer gains a spawn tool.
+
+When several subagents share a named entity, resolve it once in the parent and put the exact keys at the top of every brief, so no agent re-resolves it with a looser match:
+
+```text
+Resolved keys (use these exactly; do not substitute a name or substring match):
+- person: account id U…, git author "Jane Doe <jane@example.com>"  (confirmed: profile lookup + git log --author sample)
+- repos: org/api, org/web  (confirmed: listed by the user)
+- ticket: PROJ-123  (confirmed: opened it)
+Task: <what this agent does>  Returns: <the record shape>
+```
 
 **Their return is schema-checked, not read as prose.** Each type declares a ```returns-schema``` block in its own markdown, and the parent runs `harness/agents/validate_return.py <type> -` over the reply before believing any of it. Every record must name evidence — `path`, `brain_id`, `commit`, or for an implementer the verification command and what it printed — because a claim the parent cannot trace is a guess with a sentence around it. One bad record rejects the **whole** return: dropping it would lose work silently, which is the failure the validator exists to prevent. An empty record list is legal only for `adversary`, where finding no bug is a real answer. `tests/test_agent_returns.py` also checks each agent's own worked example against its own schema, so a type cannot teach the shape it would reject.
 
