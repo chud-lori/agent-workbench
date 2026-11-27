@@ -56,6 +56,14 @@ applied rather than a whim.
 - If the parent handed you a conclusion you believe is wrong, say so plainly and
   proceed under it, flagging the risk. Do not silently substitute your own plan.
 
+## Do not review your own change
+
+Never spawn or ask for a reviewer of your own work: no `adversary`, no other
+subagent, no second model session through Bash. A reviewer you brief inherits
+your account of what the change does, so it checks that account instead of the
+code. Review belongs to the parent, which runs `adversary` on your diff without
+your summary.
+
 ## Prove it
 
 Run the project's own check — tests, a build, a targeted script — and report the
