@@ -29,7 +29,10 @@ Skip any unavailable source and **say so in the draft** — a silently missing s
 
 ```
 recent_activity(since=<day before detection>, until=<day after resolution>)
+recent_activity(since=..., until=..., repo=<each repo with commits>)
 ```
+
+The first call returns per-repo commit counts; the second returns one repo's commits.
 
 All local repos, all branches — the change that caused an incident is frequently in a repo nobody suspected. Note commits that land suspiciously close to detection time.
 

@@ -351,6 +351,33 @@ def promote(note_id: int, target: str, config: WorkbenchConfig | None = None) ->
         conn.close()
 
 
+def get_notes(ids: list[int], config: WorkbenchConfig | None = None) -> dict[str, Any]:
+    """Full notes by id, in the order asked, whether resolved or superseded."""
+    config = config or default_config()
+    ids = [int(note_id) for note_id in ids]
+    if not config.brain_path.exists():
+        return {"ids": ids, "notes": [], "warning": "brain is empty; store notes with brain_remember"}
+    conn = _connect(config)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "select notes.rowid as id, content, kind, project, tags, created_at, resolved_at, superseded_by, "
+            "coalesce(note_stats.recall_count, 0) as recall_count, note_stats.last_recalled_at "
+            "from notes left join note_stats on note_stats.note_id = notes.rowid "
+            f"where notes.rowid in ({','.join('?' * len(ids))})",
+            ids,
+        ).fetchall()
+        _record_recall(conn, [row["id"] for row in rows])
+        found = {row["id"]: _note_dict(row) for row in rows}
+        result: dict[str, Any] = {"ids": ids, "notes": [found[note_id] for note_id in ids if note_id in found]}
+        missing = [note_id for note_id in ids if note_id not in found]
+        if missing:
+            result["missing"] = missing
+        return result
+    finally:
+        conn.close()
+
+
 def forget(note_id: int, config: WorkbenchConfig | None = None) -> dict[str, Any]:
     config = config or default_config()
     if not config.brain_path.exists():

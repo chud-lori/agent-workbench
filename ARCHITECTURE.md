@@ -162,6 +162,14 @@ Hand-rolled JSON-RPC 2.0 over stdio — no MCP SDK, one JSON object per line:
   same names to lambdas over the domain functions. 16 tools total.
 - Results are returned twice per the MCP spec: pretty-printed JSON in
   `content[0].text` and the raw dict in `structuredContent`.
+- Every result is capped at `RESULT_BYTE_CAP` (10 KB): over it, whole items are popped
+  from the largest lists (never emptying one) and the result gains `truncated`,
+  `dropped_items`, and a hint to narrow the query. `brain_export` and `doctor_report`
+  are exempt, because neither takes an argument that could narrow a cut list.
+- `brain_recall` and `brief_task` swap note bodies for one-line summaries when a list
+  holds more than `SUMMARY_THRESHOLD` (5) notes; `brain_recall ids=[...]` returns full
+  bodies. `recent_activity` drops commit lists unless `repo` is named. All three are
+  shaped here, so the domain functions keep returning full results to internal callers.
 
 ## 5. Harness integration
 
