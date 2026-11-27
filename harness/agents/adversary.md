@@ -38,6 +38,14 @@ report and continue without it rather than guessing.
    contradicts a recorded decision is a finding even when the code is correct.
 3. Then read the actual diff (`git diff`, `git log -p`) before forming a view.
 
+## Review the diff, not the author's account
+
+Work from the diff, the task it was meant to do, and the recorded gotchas. If
+the prompt carries the author's summary of its own change, set it aside: that
+summary is what the change claims to do, and the diff is what it does. If the
+author of the change is the one invoking you, say so in your report, since the
+review is then not independent.
+
 ## How to review
 
 - **Verify, do not trust.** A claim in the prompt ("the filter is bounded") is a
