@@ -22,17 +22,27 @@ class InstallHooksTests(unittest.TestCase):
     def read(self) -> dict:
         return json.loads(self.settings.read_text())
 
-    def test_fresh_install_wires_all_four_hooks(self) -> None:
+    def test_fresh_install_wires_every_hook(self) -> None:
         changes = install_hooks.install(self.settings)
-        self.assertEqual(len(changes), 4)
+        self.assertEqual(len(changes), 6)
         cfg = self.read()
         self.assertEqual(
-            set(cfg["hooks"]), {"SessionStart", "UserPromptSubmit", "Stop", "PreToolUse"}
+            set(cfg["hooks"]), {"SessionStart", "UserPromptSubmit", "Stop", "PreToolUse", "SubagentStart"}
         )
         session = cfg["hooks"]["SessionStart"][0]
         self.assertEqual(session["matcher"], "startup|resume|compact")
         self.assertIn("harness/hooks/session-start.sh", session["hooks"][0]["command"])
         self.assertEqual(cfg["hooks"]["PreToolUse"][0]["matcher"], "Bash")
+
+    def test_subagent_recall_is_wired_on_agent_spawn_and_subagent_start(self) -> None:
+        install_hooks.install(self.settings)
+        cfg = self.read()
+        agent = [e for e in cfg["hooks"]["PreToolUse"] if e.get("matcher") == "Agent"]
+        self.assertEqual(len(agent), 1)
+        self.assertIn("harness/hooks/subagent-recall.sh", agent[0]["hooks"][0]["command"])
+        (start,) = cfg["hooks"]["SubagentStart"]
+        self.assertNotIn("matcher", start)
+        self.assertIn("harness/hooks/subagent-recall.sh", start["hooks"][0]["command"])
 
     def test_reinstall_is_idempotent(self) -> None:
         install_hooks.install(self.settings)
