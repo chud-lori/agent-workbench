@@ -39,7 +39,8 @@ capabilities: a searchable code/product index, a persistent cross-tool memory
                              v                                 v
         +---------------------------------------------------------------+
         |                      domain modules                           |
-        |  brain.py        persistent notes (FTS5, porter)              |
+        |  brain.py        persistent notes (FTS5, porter) + recall tally|
+        |  rules.py        contextual rules, matched by scope not text   |
         |  code_index.py   repo index build/refresh/search (FTS5)       |
         |  activity.py     git evidence per window, all local repos     |
         |  repo_state.py   branch/baseline/worktree identity (git)      |
@@ -52,8 +53,9 @@ capabilities: a searchable code/product index, a persistent cross-tool memory
               +-------------------------+---------------------------+
               v                                                     v
    .state/index.sqlite   .state/brain.sqlite          scanned filesystem
-   (code index, FTS5)    (brain notes, FTS5)          ~/repo, ~/Projects,
-                                                      ~/.claude, ~/.codex,
+   (code index, FTS5)    (notes + rules; one      )   the repo root, the
+                         (file, several tables    )   clone's parent, the
+                                                      harness config dirs,
                                                       work-mcp checkout
 ```
 
@@ -91,12 +93,30 @@ Per-repo metadata (dominant language by suffix count, present package files) fee
 
 | Aspect | Implementation |
 |---|---|
-| Storage | single `notes` FTS5 table, `tokenize='porter'` (stemming: "resumed" matches "resume") |
+| Storage | `notes` FTS5 table, `tokenize='porter'` (stemming: "resumed" matches "resume"), plus three plain tables beside it: `note_stats`, `note_seq`, and the rule tables below |
 | Note shape | content, kind (`decision fact gotcha preference todo note`), project, tags, `created_at`, `resolved_at` |
 | Query | terms joined with `OR` (recall-oriented, unlike the index's `AND`), ranked by `bm25(notes)`; no query = most recent first |
 | Lifecycle | `resolve` stamps `resolved_at`; resolved notes are hidden from default recall (`include_resolved=true` shows them); `forget` deletes; identical content+project is deduped on insert |
+| Identity | ids are allocated from a `note_seq` high-water mark and never reissued. SQLite frees the rowid of the highest row on delete, and a note id is a reference — cited by hand as `brain#42` and used as the key of every side table — so a reused id would silently rebind them. The mark seeds from the current maximum, so an existing brain adopts it with no migration |
+| Recall tally | `note_stats(note_id, recall_count, last_recalled_at)`. Every hit increments it, including hits from a thread digest and from the prompt hook. A rehearsed note gets a capped boost off its `bm25` score, so it wins a tie against an equally-matching note nobody has opened. Date-ordered recall is deliberately not boosted: that ordering exists to preserve a timeline. The write swallows sqlite errors on purpose — a locked database must cost a count, not the lookup |
+| Deletion | `forget` clears every table in `brain.NOTE_KEYED_TABLES`, not a hand-written list per caller. A test reads `sqlite_master` and fails if a table carries a `note_id` column without being registered |
 | Migration | `_connect` detects a pre-porter or pre-`resolved_at` schema and rebuilds the table **preserving rowids**, so note ids stay stable across upgrades |
 | Backup | `export` dumps everything (including resolved) to markdown, grouped by project |
+
+### Contextual rules (`rules.py` → same `.state/brain.sqlite`)
+
+A note records *what is true*; a rule records *how to behave here*. They are not interchangeable, because the same situation needs different behaviour in different contexts.
+
+| Aspect | Implementation |
+|---|---|
+| Storage | plain `rules` table, not the FTS one: a rule is found by **scope match, not text similarity**. That is the point — a correction stored while preparing a test handoff must come back on "is this ready for QA?", which shares no words with it |
+| Rule shape | statement, why, example, scope, trigger, source, timestamps, `surfaced_count`, `corrected_count`, `retired_at` |
+| Scope | a set of `type:value` keys. A rule applies when **every** key in its scope is active, which doubles as inheritance: declaring `repo:svc` and `workstream:runtime-upgrade` together inherits the rules of each, with no parent pointers |
+| Precedence | more matched keys wins; a tie falls to the key type (`repo` > `workstream` > `task` > `audience` > `channel`), then to the newest rule |
+| Lookup | `rule_scope(rule_id, key)` and `rule_trigger(rule_id, token)` mirror the text columns and carry the indexes. The candidate query is a union of indexed sources, so rows examined follow the number of rules that *could* match, not the number stored — `prompt-recall.sh` runs it on every turn. A global rule carries a `@global` sentinel key so even that branch is indexed, and a test asserts the query plan holds no `SCAN rules` |
+| Conflicts | reported, never resolved silently, and only when rules are equally specific **and** their statements overlap. Two equally-specific rules that say unrelated things are two rules, not a conflict |
+| Feedback | there is no `applied` outcome. Whether the model obeyed a rule is self-reported, and self-reported compliance is not evidence; what is measured is that a rule was surfaced and that the output still had to be corrected |
+| Migration | a brain holding rules written before the index tables existed backfills itself on first use |
 
 ### Repository identity (`repo_state.py`)
 
@@ -142,6 +162,14 @@ Hand-rolled JSON-RPC 2.0 over stdio — no MCP SDK, one JSON object per line:
   same names to lambdas over the domain functions. 16 tools total.
 - Results are returned twice per the MCP spec: pretty-printed JSON in
   `content[0].text` and the raw dict in `structuredContent`.
+- Every result is capped at `RESULT_BYTE_CAP` (10 KB): over it, whole items are popped
+  from the largest lists (never emptying one) and the result gains `truncated`,
+  `dropped_items`, and a hint to narrow the query. `brain_export` and `doctor_report`
+  are exempt, because neither takes an argument that could narrow a cut list.
+- `brain_recall` and `brief_task` swap note bodies for one-line summaries when a list
+  holds more than `SUMMARY_THRESHOLD` (5) notes; `brain_recall ids=[...]` returns full
+  bodies. `recent_activity` drops commit lists unless `repo` is named. All three are
+  shaped here, so the domain functions keep returning full results to internal callers.
 
 ## 5. Harness integration
 
@@ -162,13 +190,27 @@ Two layers, with different guarantees:
   and kicks `refresh-index` as a detached background process. Resolves the workbench
   root from its own path, is best-effort at every step, and always exits 0 so it can
   never break session start.
+- `harness/hooks/prompt-recall.sh`, wired as `UserPromptSubmit`: passes the prompt
+  and `session_id` to `recall-brief`, which (`prompt_recall.py`) keeps a note only
+  when `-bm25 / (sqrt(distinct terms) * ln(note count))` clears `RELEVANCE_FLOOR`
+  and this session has not already been shown it at that strength or more
+  (`.state/prompt-recall-sessions.json`, 24-hour expiry, 50 sessions max). Then
+  `rules-brief` injects global rules and rules whose scope keys are all among the
+  working directory's `repo:` and `branch:`; trigger words are not consulted.
 
 **Prompt-scoped (Claude Code only).**
 - `harness/skills/*/SKILL.md` — symlinked into `~/.claude/skills/`. Skills answer
   what a store of durable facts cannot: `/standup` (activity, not memory),
-  `/brain-harvest`, `/postmortem`, `/why`, `/meeting-prep`. All share one shape:
-  gather from every source in parallel, verify before presenting, cite a surface
-  per line.
+  `/brain-harvest`, `/postmortem`, `/why`, `/meeting-prep`, `/pr-review`, and
+  `/voice`. Most share one shape: gather from every source in parallel, verify
+  before presenting, cite a surface per line. `/voice` is the exception worth
+  noting — it drafts in the user's own voice and stores what it learns as
+  audience-scoped contextual rules rather than a profile of its own, so
+  `brain_context audience:<name>` *is* the profile and there is no second
+  artifact to keep in sync.
+- `harness/commands/*.md` — symlinked into `~/.claude/commands/`. A command is for
+  behaviour that should be opt-in per turn, where a hook would fire on every turn
+  in every project. `/say` is the first.
 - `harness/agents/*.md` — symlinked into `~/.claude/agents/`. A subagent receives
   **no** hooks (a spawn is neither a session start nor a user prompt) and none of
   the parent's context, so recall must live in its own system prompt: `scout`
@@ -179,6 +221,12 @@ Two layers, with different guarantees:
   `~/.config/agent-workbench/bin/aw`: an agent's `tools:` allowlist holds no MCP
   tool, and unknown allowlist names are dropped silently, so the MCP path is not
   reachable from a restricted agent.
+  Each type also declares a `returns-schema` block in its own markdown, and
+  `harness/agents/validate_return.py` checks the reply against it before the
+  parent acts: every record must name evidence (`path`, `brain_id`, `commit`, or
+  an implementer's verification command and its real output), and one bad record
+  rejects the whole return rather than being dropped. Prose reads the same
+  whether a claim was checked or guessed, which is the gap this closes.
 
 `setup.sh` also raises Claude Code's `cleanupPeriodDays` to 3650 when unset —
 the 30-day default silently prunes `~/.claude/projects` transcripts.
@@ -196,12 +244,12 @@ can override the first two per invocation).
 | Variable | Default | Affects |
 |---|---|---|
 | `AGENT_WORKBENCH_REPO_ROOT` | `~/repo` | primary work-repo root: default index root, doc search, service lookup, doctor scans |
-| `AGENT_WORKBENCH_PROJECTS_ROOT` | `~/Projects` | secondary root for doc search, service lookup, doctor scans (not indexed by default) |
+| `AGENT_WORKBENCH_PROJECTS_ROOT` | the clone's parent directory | secondary root for doc search, service lookup, doctor scans (not indexed by default) |
 | `AGENT_WORKBENCH_INDEX_ROOTS` | `[$REPO_ROOT]` | colon- or comma-separated roots the code index scans; explicit `roots` args override |
 | `AGENT_WORKBENCH_STATE_DIR` | `<clone>/.state` | where `index.sqlite` and `brain.sqlite` live |
 | `AGENT_WORKBENCH_CLAUDE_HOME` | `~/.claude` | Claude settings scanned by doctor (permissions, secrets) |
 | `AGENT_WORKBENCH_CODEX_HOME` | `~/.codex` | Codex `config.toml` scanned by doctor and work-sources; large-state checks |
-| `AGENT_WORKBENCH_WORK_MCP_ROOT` | `~/Projects/work-mcp` | sidecar connector checkout inspected by `work_sources_status` |
+| `AGENT_WORKBENCH_WORK_MCP_ROOT` | `work-mcp/` beside the clone | sidecar connector checkout inspected by `work_sources_status` |
 
 Non-env knobs on `WorkbenchConfig`: `max_text_bytes` (256 000 — per-file read/index
 cap) and `max_search_results` (50 — default `search_knowledge` limit).

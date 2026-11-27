@@ -15,6 +15,12 @@ Three tiers, by what they cost if shipped:
 Every rule states the **evidence it demands**. A finding without that evidence
 is taste, and taste goes in a comment, not a review.
 
+Each Gate rule is also labelled with who enforces it. **Script-enforced** means
+`harness/gates/check_diff.py` decides it on the added lines of a diff, and the
+PreToolUse guard denies an agent's `git commit` that fails it. A script covers
+only the patterns it can decide cleanly, so the reviewer still applies the rest
+of the rule. **Model-enforced** means only a reviewer applies it.
+
 ## Security — tier: Gate
 
 | id | rule | evidence required |
@@ -26,6 +32,17 @@ is taste, and taste goes in a comment, not a review.
 | CR-05 | User-controlled paths are confined; no traversal past the intended root | the input, and the unvalidated join |
 | CR-06 | Crypto is a vetted primitive with adequate parameters — no home-rolled scheme, no broken hash for a security purpose | the algorithm and its use |
 
+Enforcement:
+
+- CR-01 — model-enforced. Whether input is untrusted and reaches an interpreter
+  unescaped depends on data flow a line pattern cannot see; a script would flag
+  every query builder or none.
+- CR-02 — script-enforced (`harness/gates/check_diff.py`) for private key
+  headers, AWS key ids, GitHub tokens, and Slack tokens; model-enforced for
+  everything else, including logs, error text, and `password = "..."` literals,
+  which matched test fixtures far more often than real secrets.
+- CR-03, CR-04, CR-05, CR-06 — model-enforced.
+
 ## Correctness and data — tier: Gate
 
 | id | rule | evidence required |
@@ -35,6 +52,16 @@ is taste, and taste goes in a comment, not a review.
 | CR-09 | Failures are not silently swallowed — no bare `except: pass`, no ignored error return, no empty catch | the handler, and the failure it hides |
 | CR-10 | Concurrency and ordering assumptions hold, or are enforced | the interleaving that breaks it |
 | CR-11 | A behaviour change is covered by a test, where the project tests at all | the changed behaviour, and the absent test |
+
+Enforcement:
+
+- CR-09 — script-enforced (`harness/gates/check_diff.py`) for a bare `except`,
+  `except Exception`, or `except BaseException` whose body is only `pass` in
+  Python; an empty `catch {}` or `.catch(() => {})` in JS, TS, Java, Kotlin, C#,
+  and Swift; `_ = err` and an empty `if err != nil {}` in Go. Model-enforced
+  for the rest, including `|| true`, since whether the output is used later is
+  not decidable from the line.
+- CR-07, CR-08, CR-10, CR-11 — model-enforced.
 
 ## Efficiency — tier: Justify
 
@@ -100,6 +127,9 @@ learned the hard way:
 | CR-35 | The change does not re-enter a recorded `gotcha` for this project | the note id, and the line that repeats it |
 | CR-36 | The change does not contradict a recorded `decision` without saying so | the note id, and the contradiction |
 | CR-37 | A recorded `preference` or house convention is followed over a generic default | the note id |
+
+Enforcement: CR-35, CR-36, CR-37 — model-enforced; they depend on brain notes,
+not on the diff alone.
 
 A recurrence is more urgent than a novelty: the project has already paid for
 that lesson once.

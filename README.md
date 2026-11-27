@@ -36,7 +36,7 @@ cd agent-workbench
 ./setup.sh
 ```
 
-`setup.sh` detects your harnesses (Claude Code / Codex / Gemini CLI), registers the MCP server, installs the standing instructions in a marker-fenced block so re-runs refresh in place, wires the four Claude Code hooks, links the skills and agent types, raises Claude Code's transcript retention off its 30-day default, and builds the code index. It is idempotent, so re-run it anytime. `./uninstall.sh` reverses all of it but never touches `.state/`, so the brain and the index survive.
+`setup.sh` detects your harnesses (Claude Code / Codex / Gemini CLI), registers the MCP server, installs the standing instructions in a marker-fenced block so re-runs refresh in place, wires the four Claude Code hooks, links the skills and agent types, raises Claude Code's transcript retention off its 30-day default, offers optional third-party skills and plugins from upstream rather than vendoring them (skipping any already installed), shows the index roots and lets you add folders to them, and builds the code index, or refreshes new folders and changed files when one exists. It is idempotent, so re-run it anytime. `./uninstall.sh` reverses all of it but never touches `.state/`, so the brain and the index survive.
 
 `setup.sh` is a bash script that writes symlinks, so it targets a Unix shell. Manual per-harness steps are in [AGENTS.md → Harness setup](AGENTS.md).
 
@@ -48,9 +48,9 @@ Environment variables with defaults. Nothing is hardcoded to a particular machin
 |---|---|---|
 | `AGENT_WORKBENCH_REPO_ROOT` | `~/repo` | Where your work repos live |
 | `AGENT_WORKBENCH_INDEX_ROOTS` | repo root | Roots to index (colon/comma-separated) |
-| `AGENT_WORKBENCH_PROJECTS_ROOT` | `~/Projects` | Secondary root scanned by diagnostics and activity |
-| `AGENT_WORKBENCH_STATE_DIR` | `~/Projects/agent-workbench/.state` | SQLite state location (index + brain). A fixed path, not one relative to the clone, so set this if you cloned elsewhere |
-| `AGENT_WORKBENCH_WORK_MCP_ROOT` | `~/Projects/work-mcp` | Optional connector sidecar (see below) |
+| `AGENT_WORKBENCH_PROJECTS_ROOT` | the directory holding the clone | Secondary root scanned by diagnostics and activity |
+| `AGENT_WORKBENCH_STATE_DIR` | `.state/` inside the clone | SQLite state location (index + brain). Moves with the clone |
+| `AGENT_WORKBENCH_WORK_MCP_ROOT` | `work-mcp/` beside the clone | Optional connector sidecar (see below) |
 | `AGENT_WORKBENCH_CLAUDE_HOME` / `_CODEX_HOME` | `~/.claude` / `~/.codex` | Harness config locations for diagnostics |
 
 ## MCP tools
@@ -59,12 +59,15 @@ Twenty tools, each with a CLI twin. The reference below mirrors the `TOOLS` tabl
 
 **Task start:**
 
-- `brief_task` (CLI `brief`) - one call for a ticket key or feature phrase: code hits, doc hits, matching brain notes, pinned references, likely repos, and runnable repo commands. On a prod- or deploy-flavored query it also checks the likely repo against its origin baseline and warns on divergence
+- `brief_task` (CLI `brief`) - one call for a ticket key or feature phrase: code hits, doc hits, matching brain notes, pinned references, likely repos, and runnable repo commands. On a prod- or deploy-flavored query it also checks the likely repo against its origin baseline and warns on divergence. Brain note lists longer than 5 come back as one-line summaries
 
 **Brain (persistent cross-tool memory):**
 
 - `brain_remember` (CLI `remember`) - store a durable note (`decision` / `fact` / `gotcha` / `preference` / `todo` / `note` / `reference`) with project and tags. Pass `supersedes=[ids]` to hide the notes it corrects; the result may carry `similar_notes`, which is the prompt to amend instead of stacking a near-duplicate. Convention (not enforced by the store): every note carries a source reference, such as a ticket key, a Slack thread, a doc name, or a SHA-pinned permalink
-- `brain_recall` (CLI `recall`) - FTS search with porter stemming; recent notes when no query; `thread=<key>` digests one storyline chronologically; `since`/`until` bound by when a note was stored (`'yesterday'`, `'2026-07-15'`, `'7d'`). Resolved and superseded notes stay hidden unless asked for
+- `brain_recall` (CLI `recall`) - FTS search with porter stemming; recent notes when no query; `thread=<key>` digests one storyline chronologically; `since`/`until` bound by when a note was stored (`'yesterday'`, `'2026-07-15'`, `'7d'`). Resolved and superseded notes stay hidden unless asked for. More than 5 hits come back as one-line summaries (id, kind, project, title, created date); `ids=[...]` returns full bodies, and `summary_only` forces either shape
+- `brain_rule_remember` / `brain_rules_in_force` (CLI `rule`, `rules`, `rule-context`, `rule-feedback`) - contextual rules: how to behave in a context, learned from a correction. Scoped to `repo:`/`workstream:`/`task:`/`audience:`/`channel:` keys and retrieved by scope match rather than text similarity, so a rule returns when its context returns even if the request shares no words with the correction. A rule applies when every key in its scope is active, which is how one context inherits another's rules. Overlapping rules of equal standing are reported as conflicts rather than silently resolved
+- Note ids are monotonic and never reissued, because an id is a reference: SQLite frees the rowid of the highest row on delete, and a reused id would quietly rebind every `brain#42` citation and side-table row pointing at it
+- Recall is counted. Each hit bumps that note's `recall_count` and `last_recalled_at`, and a rehearsed note wins a tie against an equally-matching note nobody has read. The counters are a read signal: they say which notes are doing work and which have been inert since the day they were written. Date-ordered listings are left alone, because a boost there would rewrite a timeline
 - `brain_amend` (CLI `amend`) - correct a note in place: append a dated addendum, or replace the body
 - `brain_promote` (CLI `promote`) - append a proven personal note to a shared, git-versioned markdown file, and stamp it so it promotes once
 - `brain_resolve` / `brain_forget` (CLI `resolve` / `forget`) - mark done (kept, hidden from default recall) / delete
@@ -81,7 +84,7 @@ Twenty tools, each with a CLI twin. The reference below mirrors the `TOOLS` tabl
 **Repo and activity:**
 
 - `repo_state` (CLI `repo-state`) - branch, ahead/behind `origin/main` or `origin/master`, dirty files, fetch staleness, and whether the path is a linked worktree. Run it before claiming how production behaves from local code
-- `recent_activity` (CLI `activity`) - commits you made in a time window across every local repo; scans all branches, so unpushed work `gh` cannot see still shows up. Commits only, since the server has no network access: the `/standup` skill merges it with Slack, calendar, and PRs, because the brain stores durable facts, not an activity log
+- `recent_activity` (CLI `activity`) - commits you made in a time window across every local repo; scans all branches, so unpushed work `gh` cannot see still shows up. Commits only, since the server has no network access: the `/standup` skill merges it with Slack, calendar, and PRs, because the brain stores durable facts, not an activity log. Returns per-repo counts by default; `repo=<name>` returns that repo's commits
 
 **Diagnostics:**
 
@@ -97,9 +100,9 @@ Standing instructions make an agent *likely* to use the brain. The hooks make mo
 | Event | Script | Does |
 |---|---|---|
 | `SessionStart` | `session-start.sh` | Prints up to five recent brain notes (trimmed, with ids) into the session. Matcher `startup\|resume\|compact`, so the brain re-primes after a context compaction. Then detaches a background job that refreshes the index and fast-forwards the clone with `git pull --ff-only`, but only when the working tree is clean |
-| `UserPromptSubmit` | `prompt-recall.sh` | FTS-matches the prompt and injects up to five one-line hits with ids; bodies stay pull-based via `brain_recall`. Threshold-gated, so a trivial prompt injects nothing |
+| `UserPromptSubmit` | `prompt-recall.sh` | FTS-matches the prompt and injects up to five one-line hits with ids; bodies stay pull-based via `brain_recall`. A hit must clear a relevance floor on its length- and brain-size-normalised bm25 score, so a generic prompt injects nothing, and a note already injected in the same session (keyed on `session_id`) is skipped unless it now matches more strongly. Then injects the rules whose scope matches the current repo and branch, plus global rules; trigger words are not used here |
 | `Stop` | `stop-memory-checkpoint.sh` | Blocks the stop once and tells the model to store anything durable from the turn. It cannot loop: the hook stays silent when the model is already continuing from its own previous block |
-| `PreToolUse` | `pretooluse-guard.sh` | Forces explicit human approval for Bash commands matching your regex patterns. Inert by default: the patterns file is per-machine and untracked, and a missing or empty file makes the hook a silent no-op |
+| `PreToolUse` | `pretooluse-guard.sh` | Forces explicit human approval for Bash commands matching your regex patterns; the patterns file is per-machine and untracked, and a missing or empty file turns that half off. Also denies a `git commit` whose added lines fail a script-enforced Gate check (see below) |
 
 All four are best-effort by design and always exit zero. A hook that can break session start is worse than a hook that occasionally does nothing.
 
@@ -112,16 +115,28 @@ Two plain git hooks in `harness/git-hooks/` keep commits attributed to the human
 
 `setup.sh` copies them to `~/.config/agent-workbench/git-hooks/` and points `core.hooksPath` there, so the guard covers every repo and survives any branch checkout. They are copies on purpose: a hook symlinked into the tree it guards vanishes the moment you check out a branch that predates it, and git treats a missing hook as no hook, so it fails without a word. Re-run `setup.sh` after editing one. They chain to any repo-local hooks, keep real human co-authors, and leave prose that merely mentions these tools alone.
 
+## Script-enforced Gate checks
+
+`harness/gates/check_diff.py` decides the Gate rules from `/pr-review` that a pattern can decide cleanly, on the **added** lines of a diff only, so existing code never blocks:
+
+- CR-02: private key headers, AWS key ids, GitHub tokens, Slack tokens. Findings name the kind of secret, never the value
+- CR-09: a bare or `Exception` `except` whose body is only `pass` (Python), an empty `catch {}` or `.catch(() => {})` (JS, TS, Java, Kotlin, C#, Swift), `_ = err` or an empty `if err != nil {}` (Go)
+
+Everything else in the Gate tier is labelled model-enforced in `rules.md`, with the reason. Run it on staged changes (`check_diff.py`), a range (`check_diff.py origin/main...HEAD`), or a PR (`gh pr diff 12 | check_diff.py -`). It exits 1 on a finding. Mark a known false positive with `gate-allow: CR-09` (or `CR-02`) in a comment on that line.
+
+The PreToolUse guard runs it when the agent runs `git commit` (`-a` includes unstaged tracked changes) and denies the commit on a finding. It is agent-scoped on purpose, not a git hook: these are not conventions to force on every repo on the machine. A file staged in the same command as the commit (`git add x && git commit`) is not staged yet when the hook runs, so `/pr-review` runs the checker again on the full diff.
+
 ## Skills (Claude Code)
 
-Six skills under `harness/skills/` share one pattern: gather from every work source in parallel, verify threads before presenting, cite a surface for every line. setup.sh symlinks them into `~/.claude/skills/`.
+Seven skills under `harness/skills/` share one pattern: gather from every work source in parallel, verify threads before presenting, cite a surface for every line. setup.sh symlinks them into `~/.claude/skills/`.
 
 - `/standup` - "what did I do yesterday?" from git, PRs, Slack, calendar, and brain notes, as paste-ready Done / Today / Blockers
 - `/brain-harvest` - weekly backfill: scan merged PRs, resolved tickets, and Slack for durable knowledge the hooks missed, deduped against existing notes and approval-gated
 - `/postmortem` - incident reconstruction: evidence timeline, blameless five-whys, action items with owners; proposes one root-cause gotcha for the brain
 - `/why` - code archaeology: blame to commit to PR to ticket to Slack to brain, answering "why does this code exist" with a cited chain, and saying so plainly when no reason was recorded
-- `/pr-review` - reviews a PR, branch, or diff against the project's recorded conventions plus six axes (comment noise, overengineering, security, efficiency, simplicity, maintainability), citing numbered rules and closing on a Gate/Justify/Lock verdict
+- `/pr-review` - reviews a PR, branch, or diff against the project's recorded conventions plus six axes (comment noise, overengineering, security, efficiency, simplicity, maintainability), citing numbered rules and closing on a Gate/Justify/Lock verdict. Findings can be emitted as records and checked by a stdlib validator, so a claim that lacks its evidence fails before it reaches the author
 - `/meeting-prep` - one-page brief for the next calendar event: what changed since last time, what you owe and are owed, likely topics
+- `/voice` - drafts in your own voice and learns it from what you actually sent. Patterns are stored as audience-scoped contextual rules rather than a separate profile, so `brain_context audience:<name>` is the profile. Never stores raw message bodies or Slack ids
 
 ## Agent types (Claude Code)
 
@@ -130,6 +145,14 @@ Subagents get no hooks and none of the parent's context, so brain recall has to 
 - `scout` - read-only investigator; recalls notes before searching the filesystem, cites `path:line` and `brain#id`
 - `implementer` - implements against recorded decisions, gotchas, and preferences, matches surrounding style, verifies with the project's own checks
 - `adversary` - loads known failure modes first, then reviews a diff for findings with a concrete failure scenario
+
+Each type declares the shape of its return, and the parent validates it with `harness/agents/validate_return.py` before acting. A record that names no evidence is rejected, and one bad record rejects the whole return rather than being quietly dropped.
+
+## Slash commands (Claude Code)
+
+`harness/commands/` ships prompts you invoke by name, symlinked into `~/.claude/commands/`. A command is for behaviour that should be opt-in per turn, where a hook would fire on every turn in every project.
+
+- `/say <prompt>` - answers, then speaks the answer aloud through macOS `say`, as a short spoken version written for the ear rather than the finished reply run through a markdown stripper
 
 ## CLI
 

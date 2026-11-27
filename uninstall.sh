@@ -54,6 +54,15 @@ for agent_file in "$WORKBENCH"/harness/agents/*.md; do
   fi
 done
 
+for cmd_file in "$WORKBENCH"/harness/commands/*.md; do
+  [ -f "$cmd_file" ] || continue
+  cmd_link="$HOME/.claude/commands/$(basename "$cmd_file")"
+  if [ -L "$cmd_link" ] && [ "$(readlink "$cmd_link")" = "$cmd_file" ]; then
+    rm "$cmd_link"
+    info "unlinked command '$(basename "$cmd_file")' from ~/.claude/commands."
+  fi
+done
+
 HOOKS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/git-hooks"
 for hook in commit-msg pre-commit; do
   # Stale symlinks from before hooks were installed as copies.

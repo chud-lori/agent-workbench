@@ -16,6 +16,13 @@ VALID_KINDS = {"decision", "fact", "gotcha", "preference", "todo", "note", "refe
 # One grouping heuristic among several — the brain is domain-agnostic.
 _KEY_PATTERN = re.compile(r"\b[A-Z][A-Z0-9]{1,9}-\d{1,8}\b")
 
+# A note that keeps proving useful should outrank an equally-matching note
+# nobody has opened. The cap keeps one heavily-rehearsed note from burying a
+# better textual match; bm25 scores here run roughly -0.5 to -10, so the
+# boost shifts ties rather than overturning relevance.
+RECALL_BOOST = 0.05
+RECALL_BOOST_CAP = 10
+
 
 def remember(
     content: str,
@@ -42,11 +49,11 @@ def remember(
         if duplicate:
             return {"id": duplicate[0], "stored": False, "warning": "identical note already exists"}
         similar = _find_similar(conn, content, project, tags)
-        cursor = conn.execute(
-            "insert into notes(content,kind,project,tags,created_at) values(?,?,?,?,?)",
-            (content, kind, project, " ".join(tags or []), int(time.time())),
+        new_id = _next_note_id(conn)
+        conn.execute(
+            "insert into notes(rowid,content,kind,project,tags,created_at) values(?,?,?,?,?,?)",
+            (new_id, content, kind, project, " ".join(tags or []), int(time.time())),
         )
-        new_id = cursor.lastrowid
         superseded: list[int] = []
         for old_id in supersedes or []:
             if old_id == new_id:
@@ -163,12 +170,21 @@ def recall(
         if not include_superseded:
             clauses.append("superseded_by is null")
         where = f"where {' and '.join(clauses)}" if clauses else ""
-        order = "order by bm25(notes)" if query and query.strip() else "order by created_at desc, rowid desc"
+        # Recency ordering is left alone: a boost there would reorder a
+        # timeline, which is the one thing that ordering exists to preserve.
+        order = (
+            f"order by bm25(notes) - min(coalesce(note_stats.recall_count, 0), {RECALL_BOOST_CAP}) * {RECALL_BOOST}"
+            if query and query.strip()
+            else "order by created_at desc, notes.rowid desc"
+        )
         rows = conn.execute(
-            f"select rowid as id, content, kind, project, tags, created_at, resolved_at, superseded_by "
-            f"from notes {where} {order} limit ?",
+            f"select notes.rowid as id, content, kind, project, tags, created_at, resolved_at, superseded_by, "
+            f"coalesce(note_stats.recall_count, 0) as recall_count, note_stats.last_recalled_at "
+            f"from notes left join note_stats on note_stats.note_id = notes.rowid "
+            f"{where} {order} limit ?",
             (*params, limit),
         ).fetchall()
+        _record_recall(conn, [row["id"] for row in rows])
         total = conn.execute("select count(*) from notes").fetchone()[0]
         result: dict[str, Any] = {
             "query": query,
@@ -229,6 +245,7 @@ def _thread_digest(conn: sqlite3.Connection, thread: str, limit: int) -> dict[st
             )
         else:
             active.append(note)
+    _record_recall(conn, [note["id"] for note in active])
     return {
         "thread": token,
         "notes": active,
@@ -334,6 +351,33 @@ def promote(note_id: int, target: str, config: WorkbenchConfig | None = None) ->
         conn.close()
 
 
+def get_notes(ids: list[int], config: WorkbenchConfig | None = None) -> dict[str, Any]:
+    """Full notes by id, in the order asked, whether resolved or superseded."""
+    config = config or default_config()
+    ids = [int(note_id) for note_id in ids]
+    if not config.brain_path.exists():
+        return {"ids": ids, "notes": [], "warning": "brain is empty; store notes with brain_remember"}
+    conn = _connect(config)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "select notes.rowid as id, content, kind, project, tags, created_at, resolved_at, superseded_by, "
+            "coalesce(note_stats.recall_count, 0) as recall_count, note_stats.last_recalled_at "
+            "from notes left join note_stats on note_stats.note_id = notes.rowid "
+            f"where notes.rowid in ({','.join('?' * len(ids))})",
+            ids,
+        ).fetchall()
+        _record_recall(conn, [row["id"] for row in rows])
+        found = {row["id"]: _note_dict(row) for row in rows}
+        result: dict[str, Any] = {"ids": ids, "notes": [found[note_id] for note_id in ids if note_id in found]}
+        missing = [note_id for note_id in ids if note_id not in found]
+        if missing:
+            result["missing"] = missing
+        return result
+    finally:
+        conn.close()
+
+
 def forget(note_id: int, config: WorkbenchConfig | None = None) -> dict[str, Any]:
     config = config or default_config()
     if not config.brain_path.exists():
@@ -341,6 +385,7 @@ def forget(note_id: int, config: WorkbenchConfig | None = None) -> dict[str, Any
     conn = _connect(config)
     try:
         cursor = conn.execute("delete from notes where rowid=?", (note_id,))
+        _purge_note(conn, note_id)
         conn.commit()
         return {"id": note_id, "deleted": cursor.rowcount > 0}
     finally:
@@ -403,6 +448,29 @@ def export(path: str | None = None, config: WorkbenchConfig | None = None) -> di
     return result
 
 
+# SQLite reuses a rowid freed by deleting the highest row, and FTS5 is no
+# exception. A note id is cited by hand all over the brain ("brain#42") and by
+# every side table, so reissuing one silently rebinds those references to a
+# different note. This table is the high-water mark; ids only ever go up.
+SEQ_SCHEMA = """
+        create table if not exists note_seq(
+            id integer primary key check (id = 1),
+            next_id integer not null
+        )
+"""
+
+# Every table keyed on a note id. forget() clears all of them, and
+# tests/test_brain_identity.py fails if a new one is added without being listed.
+NOTE_KEYED_TABLES = ("note_stats",)
+
+STATS_SCHEMA = """
+        create table if not exists note_stats(
+            note_id integer primary key,
+            recall_count integer not null default 0,
+            last_recalled_at integer
+        )
+"""
+
 NOTES_SCHEMA = """
         create virtual table if not exists {name} using fts5(
             content,
@@ -428,6 +496,8 @@ def _connect(config: WorkbenchConfig) -> sqlite3.Connection:
         _migrate(conn)
     else:
         conn.execute(NOTES_SCHEMA.format(name="notes"))
+    conn.execute(STATS_SCHEMA)
+    conn.execute(SEQ_SCHEMA)
     return conn
 
 
@@ -451,6 +521,58 @@ def _migrate(conn: sqlite3.Connection) -> None:
         raise
 
 
+def _next_note_id(conn: sqlite3.Connection) -> int:
+    """The next id, from a high-water mark that never goes backwards.
+
+    Seeded from the current maximum on first use, so an existing brain adopts
+    this without a migration: ids keep counting from where they left off.
+    """
+    row = conn.execute("select next_id from note_seq where id=1").fetchone()
+    if row is None:
+        highest = conn.execute("select coalesce(max(rowid), 0) from notes").fetchone()[0]
+        next_id = highest + 1
+        conn.execute("insert into note_seq(id, next_id) values (1, ?)", (next_id,))
+    else:
+        next_id = row[0]
+        highest = conn.execute("select coalesce(max(rowid), 0) from notes").fetchone()[0]
+        # A brain written before this existed can hold ids above the mark.
+        next_id = max(next_id, highest + 1)
+    conn.execute("update note_seq set next_id=? where id=1", (next_id + 1,))
+    return next_id
+
+
+def _purge_note(conn: sqlite3.Connection, note_id: int) -> None:
+    """Clear every table keyed on this note id.
+
+    One place to change when a table is added, instead of a delete statement
+    each caller has to remember. Monotonic ids already stop a reissue, so this
+    is about not carrying dead rows forever.
+    """
+    for table in NOTE_KEYED_TABLES:
+        conn.execute(f"delete from {table} where note_id=?", (note_id,))
+
+
+def _record_recall(conn: sqlite3.Connection, note_ids: list[int]) -> None:
+    """Count a read of each note. Best effort, and deliberately so.
+
+    Recall is a read path that several sessions can hit at once, so a locked
+    database must not fail the lookup the caller actually asked for. A lost
+    count is acceptable; a failed recall is not.
+    """
+    if not note_ids:
+        return
+    now = int(time.time())
+    try:
+        conn.executemany(
+            "insert into note_stats(note_id, recall_count, last_recalled_at) values (?, 1, ?) "
+            "on conflict(note_id) do update set recall_count = recall_count + 1, last_recalled_at = ?",
+            [(note_id, now, now) for note_id in note_ids],
+        )
+        conn.commit()
+    except sqlite3.Error:
+        pass
+
+
 def _iso(epoch: int) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(epoch))
 
@@ -463,6 +585,12 @@ def _note_dict(row: sqlite3.Row) -> dict[str, Any]:
         note["resolved_at_iso"] = _iso(note["resolved_at"])
     if not note.get("superseded_by"):
         note.pop("superseded_by", None)
+    if note.get("last_recalled_at"):
+        note["last_recalled_at_iso"] = _iso(note["last_recalled_at"])
+    else:
+        note.pop("last_recalled_at", None)
+    if not note.get("recall_count"):
+        note.pop("recall_count", None)
     return note
 
 

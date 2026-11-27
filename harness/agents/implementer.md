@@ -69,3 +69,33 @@ Files changed with paths, what each change does, the verification you ran and
 its output, and anything durable you learned (a gotcha, a convention, a
 surprising behaviour) so the parent can store it. Keep it short; the parent has
 the context, you have the diff.
+
+Close the reply with a machine-checkable block:
+
+```json
+{"records": [
+  {"path": "agent_workbench/brain.py", "summary": "count a read of each note", "verification": "python3 -m unittest discover -s tests -q -> Ran 88 tests OK", "durable": "FTS5 reuses a freed rowid"}
+]}
+```
+
+`verification` is the command and what it actually printed. "Should work" is not
+a result, and a change with no verification field is rejected rather than
+believed. The parent validates with
+`harness/agents/validate_return.py implementer -`.
+
+```returns-schema
+{
+  "record": "change",
+  "required": [
+    "path",
+    "summary"
+  ],
+  "evidence_any_of": [
+    "verification"
+  ],
+  "optional": [
+    "durable"
+  ],
+  "allow_empty": false
+}
+```

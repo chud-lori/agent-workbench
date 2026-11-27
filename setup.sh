@@ -28,6 +28,12 @@ ask() {
   [ "$reply" = "y" ] || [ "$reply" = "Y" ]
 }
 
+# True when a plugin or skill of this name is already installed for Claude Code.
+already_installed() {
+  grep -q "\"$1@" "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null \
+    || [ -e "$HOME/.claude/skills/$1/SKILL.md" ] || [ -e "$HOME/.agents/skills/$1/SKILL.md" ]
+}
+
 # Insert (or refresh) the standing-instructions block in an instruction file,
 # fenced by markers so uninstall.sh can strip it and re-runs stay current.
 install_instructions() {
@@ -124,6 +130,24 @@ if [ "$DO_CLAUDE" = "y" ]; then
     else
       ln -s "$agent_file" "$agent_link"
       info "linked agent '$agent_name' into ~/.claude/agents."
+    fi
+  done
+
+  # Slash commands: symlink each harness/commands/<name>.md into
+  # ~/.claude/commands. A command is a prompt the user invokes by name, so it
+  # belongs with the skills and agents rather than in a per-machine config.
+  mkdir -p "$HOME/.claude/commands"
+  for cmd_file in "$WORKBENCH"/harness/commands/*.md; do
+    [ -f "$cmd_file" ] || continue
+    cmd_name="$(basename "$cmd_file")"
+    cmd_link="$HOME/.claude/commands/$cmd_name"
+    if [ -L "$cmd_link" ] && [ "$(readlink "$cmd_link")" = "$cmd_file" ]; then
+      info "command '$cmd_name' already linked."
+    elif [ -e "$cmd_link" ] || [ -L "$cmd_link" ]; then
+      info "command '$cmd_name': $cmd_link already exists and is not our symlink - left as is."
+    else
+      ln -s "$cmd_file" "$cmd_link"
+      info "linked command '$cmd_name' into ~/.claude/commands."
     fi
   done
 
@@ -293,7 +317,9 @@ fi
 if [ "$DO_CLAUDE" = "y" ]; then
   step "Companion plugins (optional)"
   if command -v node >/dev/null 2>&1 && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 18 ]; then
-    if ask "Install caveman (concise agent output, github.com/JuliusBrussee/caveman)?" "n"; then
+    if already_installed caveman; then
+      info "caveman: already installed - skipped."
+    elif ask "Install caveman (concise agent output, github.com/JuliusBrussee/caveman)?" "n"; then
       # Run from $HOME: with a repo as CWD the installer also writes per-repo
       # .agents/ rule files into it. Its Gemini step prompts for trust, so a
       # closed stdin hangs it — keep this step interactive-only (ask already
@@ -301,18 +327,79 @@ if [ "$DO_CLAUDE" = "y" ]; then
       (cd "$HOME" && curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash) \
         && info "caveman installed." || info "caveman install failed - re-run its installer manually."
     fi
+    if already_installed security-audit; then
+      info "security-audit: already installed - skipped."
+    elif ask "Install the security-audit skill (multi-phase codebase audit, github.com/cloudflare/security-audit-skill)?" "n"; then
+      # Installs to ~/.agents/skills (the skills CLI's own universal dir) and
+      # symlinks into ~/.claude/skills. One target may report that it does not
+      # support global installs; the rest still succeed.
+      (cd "$HOME" && npx -y skills add https://github.com/cloudflare/security-audit-skill \
+         --skill security-audit --global --yes) \
+        && info "security-audit installed (run /security-audit)." \
+        || info "security-audit install failed - re-run its installer manually."
+    fi
   else
-    info "node >=18 not found - skipping companion plugin offers (caveman needs it)."
+    info "node >=18 not found - skipping companion plugin offers (caveman and security-audit need it)."
   fi
-  info "ponytail (minimalist code generation) installs from inside Claude Code - two separate prompts:"
-  info "  /plugin marketplace add DietrichGebert/ponytail"
-  info "  /plugin install ponytail@ponytail"
+  if already_installed ponytail; then
+    info "ponytail: already installed - skipped."
+  else
+    info "ponytail (minimalist code generation) installs from inside Claude Code - two separate prompts:"
+    info "  /plugin marketplace add DietrichGebert/ponytail"
+    info "  /plugin install ponytail@ponytail"
+  fi
+fi
+
+# --- Prerequisites report -------------------------------------------------------
+# Everything above installs cleanly without these, and every skill degrades when
+# one is absent - but it degrades at 9am inside a task, not here. Report once,
+# plainly, and never fail: a missing optional tool is not a broken setup.
+step "Prerequisites"
+report_tool() {
+  # report_tool <binary> <required|optional> <what stops working without it>
+  if command -v "$1" >/dev/null 2>&1; then
+    info "$1: present"
+  elif [ "$2" = "required" ]; then
+    info "$1: MISSING - $3"
+  else
+    info "$1: not found (optional) - $3"
+  fi
+}
+report_tool git required "recent_activity, repo_state, and the commit guard all shell out to git"
+report_tool gh optional "the PR half of /standup, /brain-harvest, /postmortem, /why and /pr-review"
+report_tool node optional "the companion plugins and skills offered above"
+if command -v gh >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1; then
+  info "gh: installed but not authenticated - run 'gh auth login' or its PR lookups return nothing"
+fi
+if [ "$DO_CLAUDE" = "y" ] && command -v claude >/dev/null 2>&1; then
+  for connector in slack atlassian google_workspace_local; do
+    if claude mcp get "$connector" >/dev/null 2>&1; then
+      info "$connector MCP: registered"
+    else
+      info "$connector MCP: absent (optional) - skills that read it will say so and continue"
+    fi
+  done
 fi
 
 # --- Code index ------------------------------------------------------------------
 step "Code index"
-info "index roots: \${AGENT_WORKBENCH_REPO_ROOT:-~/repo} (override via env before re-running)"
-if ask "Build/refresh the code index now?" "y"; then
+index_roots() { (cd "$WORKBENCH" && python3 -c 'from agent_workbench.config import load_index_roots as r; print(":".join(str(p) for p in r()))'); }
+info "index roots: $(index_roots)"
+if [ -n "${AGENT_WORKBENCH_INDEX_ROOTS:-}" ]; then
+  info "set by AGENT_WORKBENCH_INDEX_ROOTS - unset it to manage the saved list here."
+elif [ -t 0 ]; then
+  read -r -p "Add folders to index (colon-separated, Enter to keep the list): " extra_roots
+  if [ -n "$extra_roots" ]; then
+    (cd "$WORKBENCH" && python3 -c 'import sys; from agent_workbench.config import save_index_roots; save_index_roots(sys.argv[1].split(":"))' "$extra_roots")
+    info "index roots: $(index_roots)"
+  fi
+fi
+if [ -f "$WORKBENCH/.state/index.sqlite" ]; then
+  # A refresh adds new roots and changed files and keeps the rest; a rebuild would drop and re-read everything.
+  if ask "Refresh the code index (new folders and changed files only)?" "y"; then
+    python3 "$WORKBENCH/run_cli.py" refresh-index
+  fi
+elif ask "Build the code index now?" "y"; then
   python3 "$WORKBENCH/run_cli.py" index
 fi
 

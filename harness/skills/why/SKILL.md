@@ -32,6 +32,10 @@ For each shaping commit, in parallel where possible:
 - **Commit → PR:** `gh api "repos/<org>/<repo>/commits/<sha>/pulls"` (quote the URL — unquoted `?`/`=` break zsh). The PR body and review comments are where the alternatives-considered live.
 - **PR/branch/commit → ticket:** extract the ticket key from the title, branch name, or message; pull it via the Jira MCP. The ticket carries the *requirement*; the PR carries the *implementation choice*. Both are halves of the why.
 - **Ticket/date → Slack:** `slack_search_messages` with the ticket key or distinctive keywords, bounded with `on:`/`after:`/`before:` around the commit date. Decisions that never made it into the PR live here. **Never surface raw user IDs (U0…)** — resolve names with `slack_get_user` first.
+- **A missing source is a hole in the chain, not a dead end.** If `gh` is absent
+  or unauthenticated, or a connector is not installed, keep climbing the links
+  you do have and name the one you could not follow: "the PR is unreachable from
+  here" is a finding. An unmentioned gap reads as "there was nothing there".
 - **Brain:** `brain_recall` with the ticket key, file name, and topic — a stored decision note may answer the question in one hop and name who agreed.
 
 ## 4. Answer

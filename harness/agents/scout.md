@@ -63,3 +63,47 @@ a finding**: say so explicitly so the parent can amend it.
 
 Never edit files. Never suggest a fix unless asked. Locating and explaining is
 the whole job.
+
+Close the reply with a machine-checkable block, so the parent can tell a checked
+claim from a guessed one without rereading your prose:
+
+```json
+{"records": [
+  {"claim": "the limiter buckets per user, not per IP", "status": "verified", "path": "middleware/rateLimit.js:42"},
+  {"claim": "the 30-day default was never deliberate", "status": "inferred", "brain_id": "brain#661"}
+]}
+```
+
+`status` is `verified` when you read the surface yourself, `inferred` when you
+reasoned to it, `undetermined` when you could not settle it. Every record needs
+one of `path`, `brain_id` or `commit`: a claim the parent cannot trace is a
+guess with a sentence around it. The parent validates this with
+`harness/agents/validate_return.py scout -`, and one bad record rejects the
+whole return.
+
+```returns-schema
+{
+  "record": "finding",
+  "required": [
+    "claim",
+    "status"
+  ],
+  "enums": {
+    "status": [
+      "verified",
+      "inferred",
+      "undetermined"
+    ]
+  },
+  "evidence_any_of": [
+    "path",
+    "brain_id",
+    "commit"
+  ],
+  "optional": [
+    "stale_note",
+    "detail"
+  ],
+  "allow_empty": false
+}
+```

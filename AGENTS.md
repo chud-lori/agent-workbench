@@ -40,14 +40,19 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 
 | Tool | Use |
 |---|---|
-| `brief_task` | one-call task context pack (code + docs + brain + pinned references + commands; warns on prod-divergent repos) |
-| `brain_remember` / `brain_recall` / `brain_forget` | persistent cross-session, cross-tool memory (`supersedes=[ids]` retires corrected notes; `thread=` digests a storyline; `since=`/`until=` bounds by when a note was stored) |
+| `brief_task` | one-call task context pack (code + docs + brain + pinned references + commands; warns on prod-divergent repos). A note list longer than 5 comes back as summaries; `summary_only` forces either way |
+| `brain_remember` / `brain_recall` / `brain_forget` | persistent cross-session, cross-tool memory (`supersedes=[ids]` retires corrected notes; `thread=` digests a storyline; `since=`/`until=` bounds by when a note was stored). More than 5 hits come back as one-line summaries (id, kind, project, title, created date) with `truncated`; `ids=[...]` fetches full bodies |
 | `brain_amend` | correct/extend an existing note in place (append a dated addendum or replace) |
+| `brain_rule_remember` / `brain_rules_in_force` | contextual **rules** — how to behave in a context, learned from a correction. Retrieved by scope match, never text similarity |
+| `brain_rule_feedback` / `brain_context` | record that a surfaced rule failed or retire it; view one context's rules plus health flags (never surfaced, keeps being corrected) |
+| recall telemetry | every `brain_recall` hit increments that note's `recall_count` and stamps `last_recalled_at`. A rehearsed note then outranks an equally-matching note nobody has opened. Counters appear in recall output only once non-zero, and never reorder a date-ordered listing |
+| note ids | monotonic and never reissued. SQLite frees the rowid of the highest row on delete, and a note id is a reference — cited by hand as `brain#42` and by every side table — so a reused id rebinds those silently. `brain.NOTE_KEYED_TABLES` lists every table `forget()` must clear, and a test fails if a table keys on `note_id` without being listed |
 | `brain_promote` | append a proven note to a shared, git-versioned markdown reference (team playbook); stamps the note so it promotes once |
 | `brain_resolve` | mark a todo/note resolved (hidden from default recall; `include_resolved` shows it) |
 | `brain_export` | dump all brain notes to markdown (backup) |
 | `repo_state` | branch + ahead/behind origin/main|master + dirty/staleness for a repo — run before prod-behavior claims |
-| `recent_activity` | commits you made in a time window across every local repo (all branches, so unpushed work shows) — the git half of "what did I do yesterday?" |
+| `recent_activity` | commits you made in a time window across every local repo (all branches, so unpushed work shows) — the git half of "what did I do yesterday?". Per-repo counts by default; `repo=<name>` returns that repo's commits |
+| result size | every tool result is capped at about 10 KB by dropping whole list items, flagged with `truncated` and `dropped_items`. `brain_export` and `doctor_report` are exempt, since no argument could narrow them |
 | `code_search` | bm25 keyword search over indexed repos |
 | `codebase_overview` | languages/package files/docs per indexed repo |
 | `search_knowledge` | live search over CLAUDE.md/AGENTS.md/SKILL.md/READMEs |
@@ -57,9 +62,9 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 
 ## Harness setup (per user machine)
 
-Everything below assumes this repo is cloned at `$WORKBENCH` (e.g. `~/Projects/agent-workbench`). The only requirement is Python ≥3.10 — the [work-mcp](https://github.com/chud-lori/work-mcp) sidecar (Slack/Google connector MCPs) is optional; without it, `work_sources_status` simply reports it absent and everything else works. To set up the connectors too, clone work-mcp to `~/Projects/work-mcp` (or set `AGENT_WORKBENCH_WORK_MCP_ROOT`) and follow its README/setup.sh.
+Everything below assumes this repo is cloned at `$WORKBENCH`, wherever that is — defaults derive from the clone's own location, so no particular directory layout is assumed. The only requirement is Python ≥3.10 — the [work-mcp](https://github.com/chud-lori/work-mcp) sidecar (Slack/Google connector MCPs) is optional; without it, `work_sources_status` simply reports it absent and everything else works. To set up the connectors too, clone work-mcp beside this repo (or set `AGENT_WORKBENCH_WORK_MCP_ROOT`) and follow its README/setup.sh.
 
-**Recommended: run `./setup.sh`** — it does every numbered step below in one idempotent pass: detects your harnesses (Claude Code / Codex / Gemini CLI), registers the MCP server, installs the standing instructions into the right global instruction file (marker-fenced `<!-- agent-workbench:start/end -->` block, refreshed in place on re-run), wires all four Claude Code hooks via `harness/install_hooks.py` (re-runs upgrade existing entries instead of duplicating), optionally seeds guard patterns, offers optional companion plugins from upstream (caveman for concise output; prints ponytail's in-app install prompts — neither is vendored here), and builds the index. `./uninstall.sh` reverses all of it but never touches `.state/` — the brain survives. The steps below are the manual equivalent.
+**Recommended: run `./setup.sh`** — it does every numbered step below in one idempotent pass: detects your harnesses (Claude Code / Codex / Gemini CLI), registers the MCP server, installs the standing instructions into the right global instruction file (marker-fenced `<!-- agent-workbench:start/end -->` block, refreshed in place on re-run), wires all four Claude Code hooks via `harness/install_hooks.py` (re-runs upgrade existing entries instead of duplicating), optionally seeds guard patterns, offers optional companion plugins and skills from upstream (caveman for concise output; a multi-phase security-audit skill; prints ponytail's in-app install prompts — none is vendored here, so each stays current with its own maintainer and carries no licence obligation into this repo; any already installed as a Claude Code plugin or skill is skipped), shows the index roots and lets you add folders, and builds the index, or refreshes new folders and changed files when one exists. `./uninstall.sh` reverses all of it but never touches `.state/` — the brain survives. The steps below are the manual equivalent.
 
 **1. Register the MCP server:**
 
@@ -95,7 +100,7 @@ export AGENT_WORKBENCH_INDEX_ROOTS=~/repo          # optional: extra roots, colo
 python3 "$WORKBENCH/run_cli.py" index
 ```
 
-Set the env vars in your shell profile if you change the defaults; the MCP server reads them at launch.
+Set the env vars in your shell profile if you change the defaults; the MCP server reads them at launch. Without `AGENT_WORKBENCH_INDEX_ROOTS`, the roots come from `.state/index-roots` (one path per line), which setup.sh appends to when you add folders, and fall back to the repo root. `refresh-index` with a new root adds it alongside the repos already indexed, and drops repos under the refreshed roots that are gone from disk; `index` rebuilds everything from scratch.
 
 **4. Install the SessionStart hook (Claude Code):** auto-injects the 5 most recent brain notes into every session's context, self-updates the workbench (background `git pull --ff-only`, only on a clean working tree), and refreshes the code index in the background. The matcher includes `resume|compact` so the brain **re-primes after a context compaction** instead of fading mid-session. Add to `~/.claude/settings.json` (replace `<WORKBENCH>` with your clone path):
 
@@ -111,13 +116,13 @@ The script resolves the workbench root from its own location, prints nothing if 
 {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/stop-memory-checkpoint.sh"}]}]}}
 ```
 
-**6. Install the UserPromptSubmit hook (Claude Code):** approximates involuntary human recall. On every user prompt it FTS-matches the prompt against brain notes and injects up to 5 one-line hits (ids + hooks) into the turn's context; full bodies stay pull-based via `brain_recall`. Threshold-gated — trivial prompts ("yes", "go") inject nothing — and always exits 0.
+**6. Install the UserPromptSubmit hook (Claude Code):** approximates involuntary human recall. On every user prompt it FTS-matches the prompt against brain notes and injects up to 5 one-line hits (ids + hooks) into the turn's context; full bodies stay pull-based via `brain_recall`. Trivial prompts ("yes", "go") inject nothing, and a hit must clear `prompt_recall.RELEVANCE_FLOOR`: its bm25 score divided by `sqrt(distinct prompt terms) * ln(note count)`, so long prompts and large brains are not favoured and conversational filler stays under the floor. Within one session (keyed on the hook's `session_id`) a note is injected once and only again on a stronger match; that state is `.state/prompt-recall-sessions.json`, dropped after 24 hours and capped at the 50 newest sessions. It then injects the rules whose scope matches the working directory's `repo:` and `branch:` (plus global rules). Always exits 0.
 
 ```json
 {"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/prompt-recall.sh"}]}]}}
 ```
 
-**7. Install the PreToolUse guard (Claude Code, optional):** forces explicit human approval for any Bash command matching your guard patterns — enforcement outside the model, for the commands that must never run on autopilot (prod hosts, destructive infra). The mechanism is generic; patterns are per-machine and untracked: copy `harness/guard-patterns.example.txt` to `.state/guard-patterns.txt` and add your org's regexes (or point `AGENT_WORKBENCH_GUARD_PATTERNS` elsewhere). No patterns file = silent no-op.
+**7. Install the PreToolUse guard (Claude Code, optional):** forces explicit human approval for any Bash command matching your guard patterns — enforcement outside the model, for the commands that must never run on autopilot (prod hosts, destructive infra). The mechanism is generic; patterns are per-machine and untracked: copy `harness/guard-patterns.example.txt` to `.state/guard-patterns.txt` and add your org's regexes (or point `AGENT_WORKBENCH_GUARD_PATTERNS` elsewhere). No patterns file = no pattern matching. Separately, the guard denies an agent's `git commit` when `harness/gates/check_diff.py` finds a script-enforced Gate violation (CR-02 secret shapes, CR-09 swallowed failures) in the added lines; `gate-allow: CR-NN` in a comment on the flagged line overrides one known false positive. This is agent-scoped rather than a git hook because those checks are not conventions to impose on every repo on the machine. `rules.md` labels each Gate rule script-enforced or model-enforced, and `tests/test_gates.py` shows each check catching a real case and passing its near-miss.
 
 ```json
 {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/pretooluse-guard.sh"}]}]}}
@@ -146,7 +151,9 @@ Degrades cleanly: any missing source is skipped and called out, since a silently
 - `/postmortem` — reconstruct an incident from Slack + `recent_activity` + deploys + PRs + tickets into a timeline (cause introduced → detected → mitigated → resolved), a blameless five-whys, and a draft with owned action items. Ends by *proposing* one root-cause `gotcha` for the brain — approval-gated.
 - `/why` — code archaeology: climb blame → commit → PR → ticket → Slack → brain to answer "why does this code exist", with a cited evidence chain and an honest "no recorded reason survives" when the chain dead-ends.
 - `/meeting-prep` — one-page brief for the next calendar event: agenda + what changed since last occurrence + what you owe / are owed + likely topics, from calendar, Slack, Jira, PRs, and brain notes.
-- `/pr-review` — opinionated review of a GitHub PR, branch, or working diff: loads the project's recorded gotchas/decisions first (a change that walks back into a recorded trap is the highest-value finding), then checks comment noise, overengineering, security, algorithmic efficiency, simplicity, and maintainability. Every finding needs a concrete fix; an "overengineered" call must name the simpler alternative and an "inefficient" one must name the scale where it hurts. Posting to GitHub is approval-gated and never `--approve`s. Complements Claude Code's built-in `/code-review` (correctness bugs) rather than duplicating it. Findings cite numbered rules from `harness/skills/pr-review/rules.md` (CR-01…CR-38, tiered Gate / Justify / Lock, each naming the evidence it demands) and the review closes with a mechanical verdict — FAIL on any Gate finding, PASS WITH FIXES, or an honest PASS. CR-35…37 make a recorded gotcha, decision, or preference outrank any generic review opinion.
+- `/pr-review` — opinionated review of a GitHub PR, branch, or working diff: loads the project's recorded gotchas/decisions first (a change that walks back into a recorded trap is the highest-value finding), then checks comment noise, overengineering, security, algorithmic efficiency, simplicity, and maintainability. Every finding needs a concrete fix; an "overengineered" call must name the simpler alternative and an "inefficient" one must name the scale where it hurts. Posting to GitHub is approval-gated and never `--approve`s. Complements Claude Code's built-in `/code-review` (correctness bugs) rather than duplicating it. Findings cite numbered rules from `harness/skills/pr-review/rules.md` (CR-01…CR-38, tiered Gate / Justify / Lock, each naming the evidence it demands), are attacked once before being reported (a finding you never tried to kill is a guess with a rule number attached), and can be written as records checked by `harness/skills/pr-review/validate_findings.py` — stdlib, no dependencies — which fails a `confirmed` record missing its trace, an unknown rule id, or a severity on a `needs_validation` record. The review closes with a mechanical verdict — FAIL on any Gate finding, PASS WITH FIXES, or an honest PASS. CR-35…37 make a recorded gotcha, decision, or preference outrank any generic review opinion. The review starts by running `harness/gates/check_diff.py` over the diff, which decides the script-enforced parts of CR-02 and CR-09; a clean exit does not clear the model-enforced rest.
+
+- `/voice` — drafts a message in the user's own voice, and learns that voice from the messages they actually sent. It owns the harvest and the draft gate; it does **not** own storage. Voice is one context (`audience:<person>`, `channel:<name>`), so a voice rule is an ordinary contextual rule in the rule engine, and `brain_context audience:<name>` *is* the profile — there is no second artifact to keep in sync. The live thread outranks a harvested pattern, raw message bodies and `U0…` ids are never stored, and with no Slack connector it says so and falls back to the brain's existing correction notes.
 
 setup.sh symlinks every directory under `harness/skills/`, so these install with the rest; manually:
 
@@ -170,6 +177,8 @@ for a in "$WORKBENCH"/harness/agents/*.md; do ln -s "$a" ~/.claude/agents/"$(bas
 
 The parent's half of the job is a standing instruction: hand a subagent *evidence* (file:line, the snippet, `brain#id`), not conclusions it must re-derive.
 
+**Their return is schema-checked, not read as prose.** Each type declares a ```returns-schema``` block in its own markdown, and the parent runs `harness/agents/validate_return.py <type> -` over the reply before believing any of it. Every record must name evidence — `path`, `brain_id`, `commit`, or for an implementer the verification command and what it printed — because a claim the parent cannot trace is a guess with a sentence around it. One bad record rejects the **whole** return: dropping it would lose work silently, which is the failure the validator exists to prevent. An empty record list is legal only for `adversary`, where finding no bug is a real answer. `tests/test_agent_returns.py` also checks each agent's own worked example against its own schema, so a type cannot teach the shape it would reject.
+
 **They recall through Bash, not the MCP tools.** Each type runs with a restricted `tools:` allowlist, and that allowlist holds no `mcp__agent-workbench__*` tool — so an instruction to call `brain_recall` is an instruction to call a tool the agent does not have. The first version shipped exactly that: agents guessed a name (`agent-workbench__brain_recall`) and failed with "No such tool available". Listing an MCP tool in `tools:` is not a dependable fix either, since unknown allowlist names are dropped silently. So setup.sh installs a launcher at `~/.config/agent-workbench/bin/aw` (outside the clone, like the git hooks) and every agent type recalls with it:
 
 ```bash
@@ -178,9 +187,39 @@ The parent's half of the job is a standing instruction: hand a subagent *evidenc
 
 This also keeps agent prompts free of any machine-specific clone path. `tests/test_agent_types.py` fails if an agent is told to use a tool its allowlist lacks.
 
-**12. Transcript retention (Claude Code):** setup.sh sets `cleanupPeriodDays: 3650` in `~/.claude/settings.json` when unset. Claude Code otherwise prunes `~/.claude/projects` after **30 days**, silently deleting session history on a rolling basis. An existing value is left alone.
+**12. Install the slash commands (Claude Code):** `harness/commands/*.md` ships prompts you invoke by name. A command is the right shape when the *behaviour* should be opt-in per turn rather than standing — the opposite of a hook, which fires on every turn in every project whether you wanted it or not.
 
-**13. Install the commit attribution guard (any agent, any harness):** two plain git hooks in `harness/git-hooks/`, so the rule holds for *every* assistant that commits — and for humans — rather than depending on one vendor's instructions:
+- `/say <prompt>` — answers, then speaks the answer aloud through macOS `say`. The model writes a short spoken version (no markdown, no code, no URLs) and plays it detached, so a long utterance does not hold the turn open.
+
+A Stop hook could speak every reply instead, and that was the first design. It does not survive contact with the Stop hook in step 5: that one blocks turn-end once, so `Stop` fires twice per turn, and a speaking hook reads a half-finished answer on the first fire before being killed mid-word and restarted on the second. `stop_hook_active` does not reliably distinguish the last fire, so there is no clean gate. A command also lets the model write *for the ear* rather than running a finished reply through a markdown stripper.
+
+setup.sh symlinks every `harness/commands/*.md` into `~/.claude/commands/`; manually:
+
+```bash
+mkdir -p ~/.claude/commands
+for c in "$WORKBENCH"/harness/commands/*.md; do ln -s "$c" ~/.claude/commands/"$(basename "$c")"; done
+```
+
+A newly linked command is live immediately, including in the session that linked it.
+**13. Contextual rules (any harness):** a brain note records *what is true*; a rule records *how to behave here*. The two are not interchangeable, because the same situation needs different behaviour in different contexts — what counts as enough testing depends on whether it is a dependency bump or a feature, and how a message is phrased depends on who reads it.
+
+Rules live in their own table in `brain.sqlite` and are retrieved by **scope match, not text similarity**. That is the whole point: a correction stored while preparing a test handoff comes back on "is this ready for QA?", which shares no words with it. Note recall could never make that connection.
+
+- `brain_rule_remember` — statement, the user's reason, one real example, and the narrowest scope that explains the correction: `repo:x`, `workstream:y`, `task:z`, `audience:qa`, `channel:c`. A rule restating one already in the same scope sharpens it rather than stacking a near-duplicate.
+- `brain_rules_in_force` — the rules governing the active context, most specific first. A rule applies when **every** key in its scope is active, which is also the inheritance mechanism: declare `repo:svc` and `workstream:runtime-upgrade` together and you inherit the rules of each, with no parent pointers. Ties fall to the key type, ordered `repo` > `workstream` > `task` > `audience` > `channel`, then to the newest rule.
+- `brain_rule_feedback` / `brain_context` — a rule corrected twice after being shown is wrong; one `brain_context` reports as never surfaced is scoped to keys that never co-occur. Neither is visible unless the failure is recorded.
+
+Scope and trigger are stored on the rule as text, because that is what a human reads back, and mirrored into `rule_scope` / `rule_trigger` for lookup. The candidate query is driven off those indexes rather than scanning the table, since `prompt-recall.sh` runs it on **every** turn; `tests/test_rules.py` asserts the query plan contains no `SCAN rules`. A global rule carries a `@global` sentinel key so even that branch is indexed, and a brain written before the index tables existed backfills itself on first use rather than needing a migration step.
+
+**Conflicts are reported, not hidden.** Two equally-specific rules whose statements overlap come back as `conflicts`, and the standing instructions say to follow the first and name it. Two equally-specific rules that say unrelated things are not a conflict, they are two rules.
+
+**There is deliberately no `applied` outcome.** Whether the model truly obeyed a rule is self-reported, and self-reported compliance is not evidence. What can be measured is that a rule was surfaced and that the user still had to correct the output.
+
+`prompt-recall.sh` injects the rules in force on every prompt, next to the note hits. It matches on **scope only**: the hook knows `repo:` and `branch:` from the working directory, so it injects global rules and rules every one of whose keys is among those. Trigger words are not used there, because common words fired `task:` and `workstream:` rules on unrelated prompts; triggers still apply when `brain_rules_in_force` is called with a `prompt`. Unlike note recall it is not threshold-gated, because a one-word prompt is exactly where an unrepeated rule gets forgotten.
+
+**14. Transcript retention (Claude Code):** setup.sh sets `cleanupPeriodDays: 3650` in `~/.claude/settings.json` when unset. Claude Code otherwise prunes `~/.claude/projects` after **30 days**, silently deleting session history on a rolling basis. An existing value is left alone.
+
+**15. Install the commit attribution guard (any agent, any harness):** two plain git hooks in `harness/git-hooks/`, so the rule holds for *every* assistant that commits — and for humans — rather than depending on one vendor's instructions:
 
 - `commit-msg` **strips** AI-attribution lines (`Co-Authored-By:` / `Assisted-by:` naming an assistant, `Generated with …`, robot-emoji lines) and reports what it removed. It strips rather than rejects because the outcome that matters is a clean message, and stripping reaches it in one pass even when an agent's own harness keeps re-adding the trailer.
 - `pre-commit` **refuses** a commit whose author or committer is an assistant/bot identity, or whose email is unset. Identity is fixed before the message exists and a hook cannot rewrite it, so this one must reject.
@@ -201,6 +240,33 @@ cp "$HOOKS_DIR"/* <repo>/.git/hooks/
 ```
 
 Why it exists: an AI trailer that reaches GitHub attaches a bot account to the repository's contributor graph, and that cache persists long after the trailer is scrubbed. `git commit --no-verify` still bypasses the hooks by design — this is a guardrail against automation, not a lock against the repo owner. Human co-authors and prose that merely mentions these tools are deliberately left alone (`tests/test_commit_guard.py`).
+
+## Machine-local instructions (third-party plugins)
+
+The marker-fenced block in each harness's global instruction file is **shared**: it is this repo's content, it is refreshed in place on every `setup.sh` run, and it reaches anyone who clones the repo. Anything that depends on software only *you* installed does not belong there — it would break for everyone else, and a refresh would overwrite a hand-edit anyway.
+
+Write it **below** the `<!-- agent-workbench:end -->` marker instead, under a heading like `# Machine notes`. setup.sh never touches anything outside the fences.
+
+The case that keeps coming up is a **quality or house-style plugin whose rules ship as skills**. Enabling such a plugin does nothing on its own: skills load on demand, so unless a session invokes one, the rules sit unread on disk and output is unaffected. To actually apply it, the machine-local note should say three things:
+
+1. **Which skill**, by name, and **when to load it** — "before finishing a change that touches code comments" is actionable; "follow the style guide" is not.
+2. **Which rules win** where the plugin overlaps the `/pr-review` rules in `harness/skills/pr-review/rules.md`. Two rule sets that quietly disagree are worse than one: decide the precedence and write it down.
+3. That it is **instruction-based**, not enforced. A note makes the skill likely to load, not guaranteed. A hook cannot substitute here, because it cannot tell from the tool call alone whether the change touched the thing the plugin governs.
+
+To check whether a plugin is actually shaping your output, grep your instruction files for its skill names. No reference means nothing is cueing it, however enabled it looks in `settings.json`.
+
+## What setup.sh cannot install for you
+
+The MCP server, the hooks, the skills and the agent types install from this repo. Everything the *skills* then reach for comes from outside it, and a missing one rarely announces itself: the skill runs, returns a thinner answer, and nothing says a source was absent. setup.sh therefore ends with a **Prerequisites** report — informational only, since a missing optional tool is not a broken setup:
+
+| Tool | Needed by | Without it |
+|---|---|---|
+| `git` | `recent_activity`, `repo_state`, the commit guard | those return nothing useful; everything else still works |
+| `gh` (authenticated) | the PR half of `/standup`, `/brain-harvest`, `/postmortem`, `/why`, `/pr-review` | PR lookups return nothing. **An installed but unauthenticated `gh` is the quiet case**, so setup.sh runs `gh auth status` rather than just checking the binary |
+| `node` ≥ 18 | the companion plugins and skills offered at setup | those offers are skipped |
+| Slack / Atlassian / calendar MCPs | the non-git sources in the evidence skills | that source is skipped |
+
+**Every skill that reaches for one of these must say so when it is missing.** A silently absent source reads as "nothing happened there", which is the failure the whole evidence pattern exists to avoid. `tests/test_skill_contract.py` enforces it: a skill that calls an external tool without documenting the degraded path fails the suite, as does a `setup.sh` that stops reporting these.
 
 ## Measuring the brain (blind replay)
 
@@ -231,5 +297,5 @@ Regression tests live in `tests/test_worktree.py` and build a real worktree.
 - Python ≥3.10, stdlib only — do not add dependencies. `tomllib` is 3.11+, so it is imported through `util.load_toml()`, which raises a named reason on 3.10; callers must report that they could not read a file rather than reporting it as absent (`tests/test_portability.py` guards this).
 - State lives in `.state/` (`index.sqlite`, `brain.sqlite`); never commit it.
 - Shell hooks in `harness/git-hooks/` are POSIX `sh`, not bash, and are matched with `grep -E` — write alternations as `a|b`, never `a\|b` (inside `-E` that is a literal pipe, which once silently disabled the whole vendor list).
-- Index roots default to `~/repo`; override via `AGENT_WORKBENCH_INDEX_ROOTS` (colon/comma-separated) or explicit `roots` args. Doctor intentionally also scans `~/Projects`.
+- Index roots come from `AGENT_WORKBENCH_INDEX_ROOTS` (colon/comma-separated), else `.state/index-roots`, else `~/repo`; explicit `roots` args override all three. Doctor intentionally also scans the projects root, which defaults to the clone's parent directory.
 - Smoke test after changes: pipe `initialize` + `tools/list` JSON-RPC lines into `run_mcp.py` and check the reply.

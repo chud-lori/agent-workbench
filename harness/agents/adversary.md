@@ -61,3 +61,43 @@ Say "no findings" plainly when that is the truth. Do not pad, do not restate the
 diff back, and do not suggest refactors nobody asked for. If a finding matches a
 recorded gotcha, cite it (`brain#42`) — a recurrence is more urgent than a
 novelty.
+
+Close the reply with a machine-checkable block:
+
+```json
+{"records": [
+  {"claim": "amount edit double-counts the balance", "failure": "edit 100 to 150 twice; balance gains 100", "confidence": "verified", "path": "controllers/transaction.js:88", "severity": "high"}
+]}
+```
+
+`failure` is the concrete input and the wrong result, not a worry. `confidence`
+is `verified` when you read the code path, `suspected` when it needs a test to
+settle. An empty `records` list is legal and is how you say "no findings" — this
+is the one agent for which finding nothing is a real answer. The parent validates
+with `harness/agents/validate_return.py adversary -`.
+
+```returns-schema
+{
+  "record": "finding",
+  "required": [
+    "claim",
+    "failure",
+    "confidence"
+  ],
+  "enums": {
+    "confidence": [
+      "verified",
+      "suspected"
+    ]
+  },
+  "evidence_any_of": [
+    "path",
+    "brain_id"
+  ],
+  "optional": [
+    "severity",
+    "gotcha"
+  ],
+  "allow_empty": true
+}
+```

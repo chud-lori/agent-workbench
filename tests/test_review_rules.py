@@ -65,6 +65,13 @@ class StandingInstructionTests(unittest.TestCase):
         for needle in ("Think before coding", "Simplicity first", "Surgical changes", "Goal-driven execution"):
             self.assertIn(needle, text, f"standing instructions lost: {needle}")
 
+    def test_block_warns_that_plugin_skills_need_cueing(self) -> None:
+        # An enabled plugin whose skills nothing invokes is inert, which is easy
+        # to mistake for "the plugin is shaping my output".
+        text = (REPO / "harness" / "standing-instructions.md").read_text()
+        self.assertIn("does **not** apply them by default", text)
+        self.assertIn("machine-local", text)
+
     def test_detailed_reference_covers_every_principle_with_a_check(self) -> None:
         text = (REPO / "harness" / "coding-discipline.md").read_text()
         for n, title in enumerate(
