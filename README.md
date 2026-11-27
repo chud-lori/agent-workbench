@@ -59,7 +59,7 @@ Twenty tools, each with a CLI twin. The reference below mirrors the `TOOLS` tabl
 
 **Task start:**
 
-- `brief_task` (CLI `brief`) - one call for a ticket key or feature phrase: code hits, doc hits, matching brain notes, pinned references, likely repos, and runnable repo commands. On a prod- or deploy-flavored query it also checks the likely repo against its origin baseline and warns on divergence. Brain note lists longer than 5 come back as one-line summaries
+- `brief_task` (CLI `brief`) - one call for a ticket key or feature phrase: code hits, doc hits, matching brain notes, pinned references, likely repos, and runnable repo commands. On a prod- or deploy-flavored query it also checks the likely repo against its origin baseline and warns on divergence. It warns when another session edited a file in its code hits within the last week (pass `session_id`, printed at session start, so your own edits are left out). Brain note lists longer than 5 come back as one-line summaries
 
 **Brain (persistent cross-tool memory):**
 
@@ -99,13 +99,14 @@ Standing instructions make an agent *likely* to use the brain. The hooks make mo
 
 | Event | Script | Does |
 |---|---|---|
-| `SessionStart` | `session-start.sh` | Records the session's `session_id`, repo, branch and start time in `.state/ledger.sqlite`; a resume or compact updates the same row. Prints up to five recent brain notes (trimmed, with ids) into the session. Matcher `startup\|resume\|compact`, so the brain re-primes after a context compaction. Then detaches a background job that refreshes the index and fast-forwards the clone with `git pull --ff-only`, but only when the working tree is clean |
+| `SessionStart` | `session-start.sh` | Records the session's `session_id`, repo, branch and start time in `.state/ledger.sqlite`; a resume or compact updates the same row. Prints the session id, for `brief_task`, and up to five recent brain notes (trimmed, with ids) into the session. Matcher `startup\|resume\|compact`, so the brain re-primes after a context compaction. Then detaches a background job that refreshes the index and fast-forwards the clone with `git pull --ff-only`, but only when the working tree is clean |
 | `UserPromptSubmit` | `prompt-recall.sh` | FTS-matches the prompt and injects up to five one-line hits with ids; bodies stay pull-based via `brain_recall`. A hit must clear a relevance floor on its length- and brain-size-normalised bm25 score, so a generic prompt injects nothing, and a note already injected in the same session (keyed on `session_id`) is skipped unless it now matches more strongly. Then injects the rules whose scope matches the current repo and branch, plus global rules; trigger words are not used here |
 | `Stop` | `stop-memory-checkpoint.sh` | Blocks the stop once and tells the model to store anything durable from the turn. It cannot loop: the hook stays silent when the model is already continuing from its own previous block |
 | `PreToolUse` (matcher `Agent`) + `SubagentStart` | `subagent-recall.sh` | Gives a subagent the note hits and rules `prompt-recall.sh` would give its spawn prompt, as `additionalContext` at its start. `SubagentStart` carries no prompt, so the `PreToolUse` half stashes it in `.state/spawn-prompts/` and the start claims the oldest one from the same session, preferring the same agent type. No session dedupe, so a note the parent already saw still reaches the subagent; capped at 2000 characters. The `PreToolUse` half prints nothing, so the `Agent` call is never rewritten or blocked |
+| `PostToolUse` (matcher `Edit\|Write\|MultiEdit\|NotebookEdit`) | `claim-edit.sh` | Records the edited file as claimed by this session in `.state/ledger.sqlite`. `brief_task` in another session warns when one of its code hits was claimed, and how long ago. Warn-only, since a session that exits leaves its claims behind; claims expire after a week |
 | `PreToolUse` | `pretooluse-guard.sh` | Forces explicit human approval for Bash commands matching your regex patterns; the patterns file is per-machine and untracked, and a missing or empty file turns that half off. Also denies a `git commit` whose added lines fail a script-enforced Gate check (see below) |
 
-The four session hooks read their stdin through `harness/hooks/lib/hook-input.sh`, so each gets the same `session_id`. All of them are best-effort by design and always exit zero. A hook that can break session start is worse than a hook that occasionally does nothing.
+The session hooks read their stdin through `harness/hooks/lib/hook-input.sh`, so each gets the same `session_id`. All of them are best-effort by design and always exit zero. A hook that can break session start is worse than a hook that occasionally does nothing.
 
 ## Commit attribution guard
 

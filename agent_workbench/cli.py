@@ -8,7 +8,7 @@ from .brain import amend, export, forget, promote, recall, remember, resolve
 from .code_index import code_search, codebase_overview, index_status, rebuild_index, refresh_index
 from .config import WorkbenchConfig, default_config
 from .knowledge import brief_task, context_for_path, find_service_context, search_knowledge
-from .ledger import register_session
+from .ledger import claim_path, register_session
 from .mcp_server import serve
 from .prompt_recall import pop_spawn_prompt, prompt_hits, stash_spawn_prompt
 from .repo_state import repo_state
@@ -43,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     brief = sub.add_parser("brief", help="Build a deterministic task brief")
     brief.add_argument("query")
     brief.add_argument("--json", action="store_true")
+    brief.add_argument("--session", default=None, help="This session's id; its own file claims are not reported")
 
     service = sub.add_parser("service", help="Find service/repo context")
     service.add_argument("name")
@@ -136,6 +137,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     session_cmd.add_argument("session_id")
     session_cmd.add_argument("--cwd", default=".", help="Directory whose repo and branch to record")
+    claim_cmd = sub.add_parser(
+        "claim-edit", help="Claim the file in a PostToolUse edit payload on stdin for a session (used by the claim hook)"
+    )
+    claim_cmd.add_argument("session_id")
     sub.add_parser(
         "subagent-brief", help="Read a PreToolUse(Agent) or SubagentStart hook payload on stdin (used by the subagent hook)"
     )
@@ -177,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
         report = search_knowledge(args.query, config, args.limit)
         print(dump_json(report) if args.json else _format_search(report))
     elif args.command == "brief":
-        report = brief_task(args.query, config)
+        report = brief_task(args.query, config, args.session)
         print(dump_json(report) if args.json else _format_brief(report))
     elif args.command == "service":
         report = find_service_context(args.name, config)
@@ -247,6 +252,14 @@ def main(argv: list[str] | None = None) -> int:
             print(brief_text)
     elif args.command == "session-register":
         register_session(args.session_id, args.cwd, config)
+    elif args.command == "claim-edit":
+        import json
+        import sys
+
+        tool_input = json.loads(sys.stdin.read()).get("tool_input") or {}
+        path = tool_input.get("file_path") or tool_input.get("notebook_path")
+        if isinstance(path, str) and path:
+            claim_path(args.session_id, path, config)
     elif args.command == "repo-state":
         print(dump_json(repo_state(args.repo, config)))
     elif args.command == "activity":

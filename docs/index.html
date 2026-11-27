@@ -392,7 +392,7 @@ cd agent-workbench
         <h3>Task start</h3>
         <div class="tool">
           <div class="head"><span class="mcp">brief_task</span> <span class="twin">CLI: <code>run_cli.py brief "&lt;query&gt;"</code></span></div>
-          <p>One call for a ticket key or feature phrase: code index hits, agent docs, saved brain notes, pinned references, likely repos, and the commands those repos run. When the query mentions prod or deploy it also checks the likely repo against its origin baseline and warns if the checkout has diverged.</p>
+          <p>One call for a ticket key or feature phrase: code index hits, agent docs, saved brain notes, pinned references, likely repos, and the commands those repos run. When the query mentions prod or deploy it also checks the likely repo against its origin baseline and warns if the checkout has diverged. It also warns when another session edited a file in the code hits within the last week; pass <code>session_id</code> (printed at session start) so your own edits are left out.</p>
         </div>
       </div>
 
@@ -520,7 +520,7 @@ cd agent-workbench
 
 <section class="soft" id="hooks">
   <div class="wrap">
-    <h2>The four Claude Code hooks</h2>
+    <h2>The Claude Code hooks</h2>
     <p class="lede">Standing instructions make an agent likely to use the brain. The hooks make two thirds of the loop happen whether or not the model cooperates, because the harness runs them, not the model. <code>harness/install_hooks.py</code> wires them, recognises its own entries even if the clone moved, and upgrades them in place.</p>
     <ol class="hooks">
       <li>
@@ -549,8 +549,14 @@ cd agent-workbench
         <p>It also denies an agent&rsquo;s <code>git commit</code> when the added lines fail a script-enforced Gate check: a secret shape (CR-02) or a swallowed failure (CR-09). A <code>gate-allow: CR-NN</code> comment on the line overrides one known false positive.</p>
         <p class="caveat">Pattern matching is inert by default. The patterns file is per-machine and untracked, and a missing or empty file turns it off. <code>setup.sh</code> offers to seed it from the shipped example.</p>
       </li>
+      <li>
+        <span class="event">PostToolUse</span>
+        <h3>Claim</h3>
+        <p>After an Edit, Write, MultiEdit or NotebookEdit, records the file as claimed by this session in <code>.state/ledger.sqlite</code>. Its one reader is <code>brief_task</code> in another session, which warns that the path was claimed and how long ago. Timeout 10 seconds.</p>
+        <p class="caveat">A claim only warns, never blocks, because a session that exits leaves its claims behind. They expire after a week.</p>
+      </li>
     </ol>
-    <p class="note">All four scripts are best-effort by design and always exit zero. A hook that can break session start is worse than a hook that occasionally does nothing.</p>
+    <p class="note">All of them are best-effort by design and always exit zero. A hook that can break session start is worse than a hook that occasionally does nothing.</p>
     <p class="note">Two plain git hooks in <code>harness/git-hooks/</code> sit alongside them and keep commits attributed to the person who owns the repo, for any assistant rather than one vendor. <code>commit-msg</code> strips <code>Co-Authored-By</code> and "Generated with" attribution lines and says what it removed; <code>pre-commit</code> refuses a commit authored or committed under an assistant or bot identity, or with no email set. They chain to any repo-local hooks, keep real human co-authors, and leave prose that merely mentions these tools alone. Enable them for one repo through <code>.git/hooks</code>, or globally with <code>git config --global core.hooksPath</code>; <code>setup.sh</code> offers both.</p>
   </div>
 </section>

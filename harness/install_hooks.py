@@ -29,6 +29,7 @@ HOOK_SPECS = [
     ("Stop", None, "stop-memory-checkpoint.sh", 10, "Memory checkpoint"),
     ("PreToolUse", "Bash", "pretooluse-guard.sh", 10, "Guard check"),
     ("PreToolUse", "Agent", "subagent-recall.sh", 10, "Stashing subagent prompt"),
+    ("PostToolUse", "Edit|Write|MultiEdit|NotebookEdit", "claim-edit.sh", 10, "Claiming edited file"),
     ("SubagentStart", None, "subagent-recall.sh", 10, "Recalling brain notes for subagent"),
 ]
 

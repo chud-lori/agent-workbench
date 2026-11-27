@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Claude Code SessionStart hook for agent-workbench.
 #
-# Records the session in .state/ledger.sqlite, prints a compact block of
+# Records the session in .state/ledger.sqlite, prints its session id and a compact block of
 # recent brain notes to stdout (injected into the session context) and kicks
 # an incremental code-index refresh in the background. A hook must never
 # break session start: every step is best-effort and the script always exits 0.
@@ -19,6 +19,8 @@ read_hook_input
 # Upserts by session_id, so resume and compact re-register the same session.
 if [ -n "$HOOK_SESSION_ID" ]; then
     python3 "$WORKBENCH/run_cli.py" session-register "$HOOK_SESSION_ID" --cwd "$PWD" >/dev/null 2>&1 || true
+    # brief_task needs it to tell this session's file claims from another's.
+    echo "This session's id: $HOOK_SESSION_ID (pass it as session_id to brief_task)."
 fi
 
 # --- Recent brain notes -----------------------------------------------------
