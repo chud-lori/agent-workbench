@@ -226,6 +226,9 @@ Two layers, with different guarantees:
   task as it unfolds must live in its own system prompt: `scout` recalls before
   searching, `implementer` recalls conventions before editing, `adversary` recalls
   known failure modes before reviewing.
+  `implementer` has no spawn tool and is told never to request its own review:
+  the parent runs `adversary` on the diff without the implementer's summary, so
+  the review is not anchored on the author's framing.
   Recall itself goes through Bash, via the launcher setup.sh installs at
   `~/.config/agent-workbench/bin/aw`: an agent's `tools:` allowlist holds no MCP
   tool, and unknown allowlist names are dropped silently, so the MCP path is not

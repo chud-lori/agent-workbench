@@ -183,6 +183,8 @@ for a in "$WORKBENCH"/harness/agents/*.md; do ln -s "$a" ~/.claude/agents/"$(bas
 
 The parent's half of the job is a standing instruction: hand a subagent *evidence* (file:line, the snippet, `brain#id`), not conclusions it must re-derive.
 
+**An implementer does not review its own change.** Its `tools:` allowlist holds no `Agent` or `Task` tool and its prompt forbids asking for a reviewer, because a reviewer the author briefs checks the author's account rather than the code. The parent runs `adversary` itself with the diff, the task, and the project's gotchas, and leaves out the implementer's summary; the adversary sets such a summary aside if one reaches it. This is a convention the parent follows, not a mechanism: a session that calls both agents can still pass whatever context it likes. `tests/test_agent_types.py` fails if the implementer gains a spawn tool.
+
 When several subagents share a named entity, resolve it once in the parent and put the exact keys at the top of every brief, so no agent re-resolves it with a looser match:
 
 ```text

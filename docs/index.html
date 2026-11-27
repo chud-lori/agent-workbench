@@ -587,7 +587,7 @@ cd agent-workbench
         </thead>
         <tbody>
           <tr><td><code>scout</code></td><td>Read-only investigator. Checks recorded memory before searching the filesystem, cites <code>path:line</code> and note ids, and reports notes the code now contradicts.</td></tr>
-          <tr><td><code>implementer</code></td><td>Writes code against recorded decisions, gotchas, and preferences, follows the surrounding style, and reports the change with proof it works.</td></tr>
+          <tr><td><code>implementer</code></td><td>Writes code against recorded decisions, gotchas, and preferences, follows the surrounding style, and reports the change with proof it works. It never invokes its own reviewer.</td></tr>
           <tr><td><code>adversary</code></td><td>Loads the project's known failure modes first, then hunts for the bug that history says is likely. Reports a finding with a concrete failure scenario, or reports nothing.</td></tr>
         </tbody>
       </table>

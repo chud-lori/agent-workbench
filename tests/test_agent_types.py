@@ -47,6 +47,16 @@ class AgentTypeTests(unittest.TestCase):
                     text, rf"`{bare}`", f"{path.name} instructs `{bare}` but its toolset has no such tool"
                 )
 
+    def test_implementer_cannot_invoke_its_own_reviewer(self) -> None:
+        # A reviewer briefed by the author checks the author's account, not the code.
+        implementer = (REPO / "harness" / "agents" / "implementer.md").read_text()
+        self.assertTrue(_tools(implementer), "implementer has no tools allowlist, so it inherits every tool")
+        for spawner in ("Agent", "Task"):
+            self.assertNotIn(spawner, _tools(implementer), f"implementer can spawn agents via {spawner}")
+        self.assertIn("Do not review your own change", implementer)
+        adversary = (REPO / "harness" / "agents" / "adversary.md").read_text()
+        self.assertIn("Review the diff, not the author's account", adversary)
+
     def test_setup_renders_a_working_launcher(self) -> None:
         # The heredoc escaping of "$@" is the part that breaks silently.
         block = re.search(r"^AW_BIN=.*?^fi$", (REPO / "setup.sh").read_text(), re.S | re.M).group(0)
