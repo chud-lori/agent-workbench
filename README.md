@@ -143,7 +143,7 @@ Seven skills under `harness/skills/` share one pattern: gather from every work s
 Subagents get no hooks and none of the parent's context, so brain recall has to live in their own system prompt. They also run with a restricted toolset that holds no MCP tools, so they recall through Bash with the CLI launcher setup.sh installs at `~/.config/agent-workbench/bin/aw`. `harness/agents/` ships three types that do it, symlinked into `~/.claude/agents/`:
 
 - `scout` - read-only investigator; recalls notes before searching the filesystem, cites `path:line` and `brain#id`
-- `implementer` - implements against recorded decisions, gotchas, and preferences, matches surrounding style, verifies with the project's own checks
+- `implementer` - implements against recorded decisions, gotchas, and preferences, matches surrounding style, verifies with the project's own checks, and never invokes its own reviewer
 - `adversary` - loads known failure modes first, then reviews a diff for findings with a concrete failure scenario
 
 Each type declares the shape of its return, and the parent validates it with `harness/agents/validate_return.py` before acting. A record that names no evidence is rejected, and one bad record rejects the whole return rather than being quietly dropped.
