@@ -38,7 +38,7 @@ willing to name its own limits in the same sentence as a capability.
 - "Notes without breadcrumbs are dead ends." (`AGENTS.md`, standing instruction 2)
 - "The brain is a store of durable facts, **not an activity log**." (`AGENTS.md`, standing instruction 4)
 - "Instruction-based vs hook-enforced. Standing instructions make agents *likely* to use the brain; the SessionStart hook makes recall *guaranteed*." (`README.md`, Design notes)
-- "Missing/empty file = guard inactive (hook is a silent no-op)." (`harness/hooks/pretooluse-guard.sh:11`)
+- "Missing/empty file = pattern guard inactive." (`harness/hooks/pretooluse-guard.sh:11`)
 
 That last habit is the voice: every claim arrives with the condition under
 which it is false. The site copy keeps it. No superlatives, no adjectives the

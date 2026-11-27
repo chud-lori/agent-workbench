@@ -58,6 +58,22 @@ mention one at all.
 Read enough surrounding code to judge the change fairly: a function that looks
 over-abstracted may have three callers you cannot see in the diff.
 
+**Run the script-enforced Gate checks** before reading for anything else. The
+checker lives two directories above this skill, in `harness/gates/`:
+
+```bash
+python3 <skill dir>/../../gates/check_diff.py <base>...HEAD   # a branch
+python3 <skill dir>/../../gates/check_diff.py                 # staged changes
+gh pr diff <n> | python3 <skill dir>/../../gates/check_diff.py -   # a PR
+```
+
+It reads only added lines and prints `path:line: CR-NN ...`. Exit 1 means a
+Gate finding: report each one as `confirmed` unless you open the file and it is
+plainly a false positive, in which case say so and suggest the `gate-allow:
+CR-NN` marker. Exit 0 does **not** clear CR-02 or CR-09. The script covers only
+the patterns `rules.md` lists under each rule's enforcement note; the rest of
+those rules, and every model-enforced rule, are still yours to check.
+
 ## 3. The six axes
 
 For each, the bar is a **specific, checkable claim** — not a smell. The rule

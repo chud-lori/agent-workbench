@@ -102,7 +102,7 @@ Standing instructions make an agent *likely* to use the brain. The hooks make mo
 | `SessionStart` | `session-start.sh` | Prints up to five recent brain notes (trimmed, with ids) into the session. Matcher `startup\|resume\|compact`, so the brain re-primes after a context compaction. Then detaches a background job that refreshes the index and fast-forwards the clone with `git pull --ff-only`, but only when the working tree is clean |
 | `UserPromptSubmit` | `prompt-recall.sh` | FTS-matches the prompt and injects up to five one-line hits with ids; bodies stay pull-based via `brain_recall`. Threshold-gated, so a trivial prompt injects nothing. Then injects the rules in force for the active context, which is not threshold-gated because a rule is already scoped |
 | `Stop` | `stop-memory-checkpoint.sh` | Blocks the stop once and tells the model to store anything durable from the turn. It cannot loop: the hook stays silent when the model is already continuing from its own previous block |
-| `PreToolUse` | `pretooluse-guard.sh` | Forces explicit human approval for Bash commands matching your regex patterns. Inert by default: the patterns file is per-machine and untracked, and a missing or empty file makes the hook a silent no-op |
+| `PreToolUse` | `pretooluse-guard.sh` | Forces explicit human approval for Bash commands matching your regex patterns; the patterns file is per-machine and untracked, and a missing or empty file turns that half off. Also denies a `git commit` whose added lines fail a script-enforced Gate check (see below) |
 
 All four are best-effort by design and always exit zero. A hook that can break session start is worse than a hook that occasionally does nothing.
 
@@ -114,6 +114,17 @@ Two plain git hooks in `harness/git-hooks/` keep commits attributed to the human
 - `pre-commit` refuses a commit authored or committed under an assistant or bot identity, or with no email set
 
 `setup.sh` copies them to `~/.config/agent-workbench/git-hooks/` and points `core.hooksPath` there, so the guard covers every repo and survives any branch checkout. They are copies on purpose: a hook symlinked into the tree it guards vanishes the moment you check out a branch that predates it, and git treats a missing hook as no hook, so it fails without a word. Re-run `setup.sh` after editing one. They chain to any repo-local hooks, keep real human co-authors, and leave prose that merely mentions these tools alone.
+
+## Script-enforced Gate checks
+
+`harness/gates/check_diff.py` decides the Gate rules from `/pr-review` that a pattern can decide cleanly, on the **added** lines of a diff only, so existing code never blocks:
+
+- CR-02: private key headers, AWS key ids, GitHub tokens, Slack tokens. Findings name the kind of secret, never the value
+- CR-09: a bare or `Exception` `except` whose body is only `pass` (Python), an empty `catch {}` or `.catch(() => {})` (JS, TS, Java, Kotlin, C#, Swift), `_ = err` or an empty `if err != nil {}` (Go)
+
+Everything else in the Gate tier is labelled model-enforced in `rules.md`, with the reason. Run it on staged changes (`check_diff.py`), a range (`check_diff.py origin/main...HEAD`), or a PR (`gh pr diff 12 | check_diff.py -`). It exits 1 on a finding. Mark a known false positive with `gate-allow: CR-09` (or `CR-02`) in a comment on that line.
+
+The PreToolUse guard runs it when the agent runs `git commit` (`-a` includes unstaged tracked changes) and denies the commit on a finding. It is agent-scoped on purpose, not a git hook: these are not conventions to force on every repo on the machine. A file staged in the same command as the commit (`git add x && git commit`) is not staged yet when the hook runs, so `/pr-review` runs the checker again on the full diff.
 
 ## Skills (Claude Code)
 

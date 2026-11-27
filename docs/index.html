@@ -546,7 +546,8 @@ cd agent-workbench
         <span class="event">PreToolUse</span>
         <h3>Guard</h3>
         <p>Matches Bash commands against your own regex patterns and forces an explicit human approval on a hit. The check runs outside the model, so a convincing but wrong chain of reasoning cannot talk its way past it. Timeout 10 seconds.</p>
-        <p class="caveat">Inert by default. The patterns file is per-machine and untracked, and a missing or empty file makes the hook a silent no-op. <code>setup.sh</code> offers to seed it from the shipped example.</p>
+        <p>It also denies an agent&rsquo;s <code>git commit</code> when the added lines fail a script-enforced Gate check: a secret shape (CR-02) or a swallowed failure (CR-09). A <code>gate-allow: CR-NN</code> comment on the line overrides one known false positive.</p>
+        <p class="caveat">Pattern matching is inert by default. The patterns file is per-machine and untracked, and a missing or empty file turns it off. <code>setup.sh</code> offers to seed it from the shipped example.</p>
       </li>
     </ol>
     <p class="note">All four scripts are best-effort by design and always exit zero. A hook that can break session start is worse than a hook that occasionally does nothing.</p>
