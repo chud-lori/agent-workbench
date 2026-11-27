@@ -31,9 +31,10 @@ Run these concurrently. If a source is unavailable (gh unauthenticated, an MCP a
 
 ```
 recent_activity(since="yesterday", until="yesterday")
+recent_activity(since="yesterday", until="yesterday", repo="<each repo with commits>")
 ```
 
-Scans all branches, so unpushed work that `gh` cannot see still shows up. `subject` lines are noisy — use them to jog memory, never as standup lines verbatim.
+The first call returns per-repo commit counts; the second returns one repo's commits. Scans all branches, so unpushed work that `gh` cannot see still shows up. `subject` lines are noisy — use them to jog memory, never as standup lines verbatim.
 
 **PRs (gh CLI)** — what actually landed, and what's on your plate:
 

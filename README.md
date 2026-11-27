@@ -59,12 +59,12 @@ Twenty tools, each with a CLI twin. The reference below mirrors the `TOOLS` tabl
 
 **Task start:**
 
-- `brief_task` (CLI `brief`) - one call for a ticket key or feature phrase: code hits, doc hits, matching brain notes, pinned references, likely repos, and runnable repo commands. On a prod- or deploy-flavored query it also checks the likely repo against its origin baseline and warns on divergence
+- `brief_task` (CLI `brief`) - one call for a ticket key or feature phrase: code hits, doc hits, matching brain notes, pinned references, likely repos, and runnable repo commands. On a prod- or deploy-flavored query it also checks the likely repo against its origin baseline and warns on divergence. Brain note lists longer than 5 come back as one-line summaries
 
 **Brain (persistent cross-tool memory):**
 
 - `brain_remember` (CLI `remember`) - store a durable note (`decision` / `fact` / `gotcha` / `preference` / `todo` / `note` / `reference`) with project and tags. Pass `supersedes=[ids]` to hide the notes it corrects; the result may carry `similar_notes`, which is the prompt to amend instead of stacking a near-duplicate. Convention (not enforced by the store): every note carries a source reference, such as a ticket key, a Slack thread, a doc name, or a SHA-pinned permalink
-- `brain_recall` (CLI `recall`) - FTS search with porter stemming; recent notes when no query; `thread=<key>` digests one storyline chronologically; `since`/`until` bound by when a note was stored (`'yesterday'`, `'2026-07-15'`, `'7d'`). Resolved and superseded notes stay hidden unless asked for
+- `brain_recall` (CLI `recall`) - FTS search with porter stemming; recent notes when no query; `thread=<key>` digests one storyline chronologically; `since`/`until` bound by when a note was stored (`'yesterday'`, `'2026-07-15'`, `'7d'`). Resolved and superseded notes stay hidden unless asked for. More than 5 hits come back as one-line summaries (id, kind, project, title, created date); `ids=[...]` returns full bodies, and `summary_only` forces either shape
 - `brain_rule_remember` / `brain_rules_in_force` (CLI `rule`, `rules`, `rule-context`, `rule-feedback`) - contextual rules: how to behave in a context, learned from a correction. Scoped to `repo:`/`workstream:`/`task:`/`audience:`/`channel:` keys and retrieved by scope match rather than text similarity, so a rule returns when its context returns even if the request shares no words with the correction. A rule applies when every key in its scope is active, which is how one context inherits another's rules. Overlapping rules of equal standing are reported as conflicts rather than silently resolved
 - Note ids are monotonic and never reissued, because an id is a reference: SQLite frees the rowid of the highest row on delete, and a reused id would quietly rebind every `brain#42` citation and side-table row pointing at it
 - Recall is counted. Each hit bumps that note's `recall_count` and `last_recalled_at`, and a rehearsed note wins a tie against an equally-matching note nobody has read. The counters are a read signal: they say which notes are doing work and which have been inert since the day they were written. Date-ordered listings are left alone, because a boost there would rewrite a timeline
@@ -84,7 +84,7 @@ Twenty tools, each with a CLI twin. The reference below mirrors the `TOOLS` tabl
 **Repo and activity:**
 
 - `repo_state` (CLI `repo-state`) - branch, ahead/behind `origin/main` or `origin/master`, dirty files, fetch staleness, and whether the path is a linked worktree. Run it before claiming how production behaves from local code
-- `recent_activity` (CLI `activity`) - commits you made in a time window across every local repo; scans all branches, so unpushed work `gh` cannot see still shows up. Commits only, since the server has no network access: the `/standup` skill merges it with Slack, calendar, and PRs, because the brain stores durable facts, not an activity log
+- `recent_activity` (CLI `activity`) - commits you made in a time window across every local repo; scans all branches, so unpushed work `gh` cannot see still shows up. Commits only, since the server has no network access: the `/standup` skill merges it with Slack, calendar, and PRs, because the brain stores durable facts, not an activity log. Returns per-repo counts by default; `repo=<name>` returns that repo's commits
 
 **Diagnostics:**
 

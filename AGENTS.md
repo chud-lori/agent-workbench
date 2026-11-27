@@ -38,8 +38,8 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 
 | Tool | Use |
 |---|---|
-| `brief_task` | one-call task context pack (code + docs + brain + pinned references + commands; warns on prod-divergent repos) |
-| `brain_remember` / `brain_recall` / `brain_forget` | persistent cross-session, cross-tool memory (`supersedes=[ids]` retires corrected notes; `thread=` digests a storyline; `since=`/`until=` bounds by when a note was stored) |
+| `brief_task` | one-call task context pack (code + docs + brain + pinned references + commands; warns on prod-divergent repos). A note list longer than 5 comes back as summaries; `summary_only` forces either way |
+| `brain_remember` / `brain_recall` / `brain_forget` | persistent cross-session, cross-tool memory (`supersedes=[ids]` retires corrected notes; `thread=` digests a storyline; `since=`/`until=` bounds by when a note was stored). More than 5 hits come back as one-line summaries (id, kind, project, title, created date) with `truncated`; `ids=[...]` fetches full bodies |
 | `brain_amend` | correct/extend an existing note in place (append a dated addendum or replace) |
 | `brain_rule_remember` / `brain_rules_in_force` | contextual **rules** — how to behave in a context, learned from a correction. Retrieved by scope match, never text similarity |
 | `brain_rule_feedback` / `brain_context` | record that a surfaced rule failed or retire it; view one context's rules plus health flags (never surfaced, keeps being corrected) |
@@ -49,7 +49,8 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 | `brain_resolve` | mark a todo/note resolved (hidden from default recall; `include_resolved` shows it) |
 | `brain_export` | dump all brain notes to markdown (backup) |
 | `repo_state` | branch + ahead/behind origin/main|master + dirty/staleness for a repo — run before prod-behavior claims |
-| `recent_activity` | commits you made in a time window across every local repo (all branches, so unpushed work shows) — the git half of "what did I do yesterday?" |
+| `recent_activity` | commits you made in a time window across every local repo (all branches, so unpushed work shows) — the git half of "what did I do yesterday?". Per-repo counts by default; `repo=<name>` returns that repo's commits |
+| result size | every tool result is capped at about 10 KB by dropping whole list items, flagged with `truncated` and `dropped_items`. `brain_export` and `doctor_report` are exempt, since no argument could narrow them |
 | `code_search` | bm25 keyword search over indexed repos |
 | `codebase_overview` | languages/package files/docs per indexed repo |
 | `search_knowledge` | live search over CLAUDE.md/AGENTS.md/SKILL.md/READMEs |
