@@ -70,14 +70,18 @@ claim from a guessed one without rereading your prose:
 ```json
 {"records": [
   {"claim": "the limiter buckets per user, not per IP", "status": "verified", "path": "middleware/rateLimit.js:42"},
-  {"claim": "the 30-day default was never deliberate", "status": "inferred", "brain_id": "brain#661"}
+  {"claim": "the 30-day default was never deliberate", "status": "inferred", "brain_id": "brain#661"},
+  {"claim": "the deployed branch still has the old limit", "status": "verified", "command": "git grep -n LIMIT origin/main -- config.js -> origin/main:config.js:7:LIMIT = 100", "verified_against": "api@origin/main 3f2a9c1"}
 ]}
 ```
 
 `status` is `verified` when you read the surface yourself, `inferred` when you
 reasoned to it, `undetermined` when you could not settle it. Every record needs
-one of `path`, `brain_id` or `commit`: a claim the parent cannot trace is a
-guess with a sentence around it. The parent validates this with
+one of `path`, `brain_id`, `commit` or `command` (the command and what it
+actually printed): a claim the parent cannot trace is a guess with a sentence
+around it, and it does not cross back to the parent. Add `verified_against`
+(`repo@ref sha`, or `local checkout only`) when the checkout you read might not
+be the deployed branch. The parent validates this with
 `harness/agents/validate_return.py scout -`, and one bad record rejects the
 whole return.
 
@@ -98,11 +102,13 @@ whole return.
   "evidence_any_of": [
     "path",
     "brain_id",
-    "commit"
+    "commit",
+    "command"
   ],
   "optional": [
     "stale_note",
-    "detail"
+    "detail",
+    "verified_against"
   ],
   "allow_empty": false
 }

@@ -249,8 +249,10 @@ Two layers, with different guarantees:
   reachable from a restricted agent.
   Each type also declares a `returns-schema` block in its own markdown, and
   `harness/agents/validate_return.py` checks the reply against it before the
-  parent acts: every record must name evidence (`path`, `brain_id`, `commit`, or
-  an implementer's verification command and its real output), and one bad record
+  parent acts: every record must name evidence (`path`, `brain_id`, `commit`, a
+  `command` with its real output, or an implementer's verification command and
+  its real output), and `scout` and `adversary` records may say what they were
+  `verified_against` (`repo@ref sha`, or `local checkout only`). One bad record
   rejects the whole return rather than being dropped. Prose reads the same
   whether a claim was checked or guessed, which is the gap this closes.
 
