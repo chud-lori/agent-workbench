@@ -533,8 +533,8 @@ cd agent-workbench
         <span class="event">UserPromptSubmit</span>
         <h3>Recall</h3>
         <p>Matches your prompt against the brain and injects up to five one-line hits, ids included. Bodies stay pull-based through <code>brain_recall</code>, so the injection stays small. Timeout 10 seconds.</p>
-        <p>It then injects the contextual rules that govern where you are, derived from the working directory. That half is not threshold-gated, because a rule is already scoped to where it belongs and a one-word prompt is exactly where an unrepeated rule gets forgotten.</p>
-        <p class="caveat">Note recall is threshold-gated: a short or trivial prompt injects no notes rather than noise.</p>
+        <p>It then injects the contextual rules whose scope matches the repo and branch of the working directory, plus global rules. Trigger words are not used here, so a rule scoped to another task stays out. That half is not threshold-gated, because a one-word prompt is exactly where an unrepeated rule gets forgotten.</p>
+        <p class="caveat">Note recall has a relevance floor: a hit's bm25 score, normalised for prompt length and brain size, must clear it, so a generic prompt injects no notes rather than noise. A note already injected in the same session is skipped unless it now matches more strongly.</p>
       </li>
       <li>
         <span class="event">Stop</span>

@@ -27,9 +27,9 @@ Run when the user asks, or when a draft has just been corrected and the correcti
    - sign-offs, recurring phrases, punctuation habits
    - for a channel: thread-title shape, and the request shape (context line, bullets, ask)
 3. **Store each pattern as a rule**, one `brain_rule_remember` per pattern, scoped to `audience:<name>` or `channel:<name>`. Put the observed evidence in `example` as a short phrase, and the reason in `why` when the user gave one.
-4. **Give each rule trigger words** — `draft`, `reply`, `message`, `msg`, `dm` — so the UserPromptSubmit hook
-   surfaces it on a draft request. The hook derives `repo:` and `branch:` from the working directory and cannot
-   know the recipient, so a voice rule that carries no trigger only ever arrives when this skill asks for it.
+4. **Give each rule trigger words** — `draft`, `reply`, `message`, `msg`, `dm` — so `brain_rules_in_force`
+   surfaces it when called with the draft request as `prompt`. The UserPromptSubmit hook matches on scope only,
+   from the working directory's `repo:` and `branch:`, so a voice rule arrives when this skill asks for it.
 5. **Merge existing corrections.** Recall `preference` notes tagged `communication` or `slack-draft` and store each as a rule in the narrowest scope that explains it. A rule restating one already in the same scope sharpens it rather than duplicating it, so re-harvesting is safe to repeat.
 
 If the Slack connector is absent or unauthenticated, say so in one line and harvest from the brain's existing correction notes alone. A profile built from notes only is thinner, and the user should be told that rather than handed it silently. Never infer a pattern from a single message.
