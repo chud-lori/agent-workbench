@@ -40,7 +40,7 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 
 | Tool | Use |
 |---|---|
-| `brief_task` | one-call task context pack (code + docs + brain + pinned references + commands; warns on prod-divergent repos). A note list longer than 5 comes back as summaries; `summary_only` forces either way |
+| `brief_task` | one-call task context pack (code + docs + brain + pinned references + commands; warns on prod-divergent repos, and on code hits another session edited this week; pass `session_id` to leave out your own). A note list longer than 5 comes back as summaries; `summary_only` forces either way |
 | `brain_remember` / `brain_recall` / `brain_forget` | persistent cross-session, cross-tool memory (`supersedes=[ids]` retires corrected notes; `thread=` digests a storyline; `since=`/`until=` bounds by when a note was stored). More than 5 hits come back as one-line summaries (id, kind, project, title, created date) with `truncated`; `ids=[...]` fetches full bodies |
 | `brain_amend` | correct/extend an existing note in place (append a dated addendum or replace) |
 | `brain_rule_remember` / `brain_rules_in_force` | contextual **rules** — how to behave in a context, learned from a correction. Retrieved by scope match, never text similarity |
@@ -102,13 +102,13 @@ python3 "$WORKBENCH/run_cli.py" index
 
 Set the env vars in your shell profile if you change the defaults; the MCP server reads them at launch. Without `AGENT_WORKBENCH_INDEX_ROOTS`, the roots come from `.state/index-roots` (one path per line), which setup.sh appends to when you add folders, and fall back to the repo root. `refresh-index` with a new root adds it alongside the repos already indexed, and drops repos under the refreshed roots that are gone from disk; `index` rebuilds everything from scratch.
 
-**4. Install the SessionStart hook (Claude Code):** records the session (`session_id`, repo, branch, `started_at`) in `.state/ledger.sqlite`, auto-injects the 5 most recent brain notes into every session's context, self-updates the workbench (background `git pull --ff-only`, only on a clean working tree), and refreshes the code index in the background. The matcher includes `resume|compact` so the brain **re-primes after a context compaction** instead of fading mid-session. Add to `~/.claude/settings.json` (replace `<WORKBENCH>` with your clone path):
+**4. Install the SessionStart hook (Claude Code):** records the session (`session_id`, repo, branch, `started_at`) in `.state/ledger.sqlite`, prints the session id for `brief_task`, auto-injects the 5 most recent brain notes into every session's context, self-updates the workbench (background `git pull --ff-only`, only on a clean working tree), and refreshes the code index in the background. The matcher includes `resume|compact` so the brain **re-primes after a context compaction** instead of fading mid-session. Add to `~/.claude/settings.json` (replace `<WORKBENCH>` with your clone path):
 
 ```json
 {"hooks": {"SessionStart": [{"matcher": "startup|resume|compact", "hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/session-start.sh"}]}]}}
 ```
 
-The script resolves the workbench root from its own location, prints nothing if the brain is empty, and always exits 0 so it can never break session start. A resumed or compacted session re-registers under the same `session_id`, keeping its first `started_at`. Nothing reads the ledger yet. Every hook reads its stdin through `harness/hooks/lib/hook-input.sh`, which sets `HOOK_PAYLOAD` and `HOOK_SESSION_ID`, so no hook parses `session_id` on its own. (All the hook snippets here are what `harness/install_hooks.py` writes for you.)
+The script resolves the workbench root from its own location, prints nothing if the brain is empty, and always exits 0 so it can never break session start. A resumed or compacted session re-registers under the same `session_id`, keeping its first `started_at`. Every hook reads its stdin through `harness/hooks/lib/hook-input.sh`, which sets `HOOK_PAYLOAD` and `HOOK_SESSION_ID`, so no hook parses `session_id` on its own. (All the hook snippets here are what `harness/install_hooks.py` writes for you.)
 
 **5. Install the Stop hook (Claude Code):** enforces the "store durable knowledge" instruction instead of leaving it to model judgment. At every turn end it blocks the stop once and tells the model to save any decisions, gotchas, run results, or new conventions from the turn with `brain_remember` (or end immediately if nothing durable was learned). The `stop_hook_active` flag guarantees it can never loop, and the script always exits 0.
 
@@ -126,6 +126,12 @@ The script resolves the workbench root from its own location, prints nothing if 
 
 ```json
 {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/pretooluse-guard.sh"}]}]}}
+```
+
+**7a. Install the edit claim hook (Claude Code):** `harness/hooks/claim-edit.sh`, wired as `PostToolUse` on `Edit|Write|MultiEdit|NotebookEdit`, claims the edited file for the session in the ledger's `claims` table. Its only reader is `brief_task`: when a code hit is a file another session claimed in the last week, it warns "another session (<id>) claimed <repo>/<path> 20 minutes ago". The claim warns and never blocks, because a session that exits without releasing a claim would otherwise lock the file. Claims older than a week are ignored and deleted on the next write. This is a lock with an expiry, not a tracker: conclusions that outlive the task go to the brain through `brain_remember`.
+
+```json
+{"hooks": {"PostToolUse": [{"matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "bash <WORKBENCH>/harness/hooks/claim-edit.sh"}]}]}}
 ```
 
 **7b. Install the subagent recall hook (Claude Code):** `harness/hooks/subagent-recall.sh` is wired twice. As `PreToolUse` with matcher `Agent` it stashes the spawn prompt in `.state/spawn-prompts/` and prints nothing, so the call is never rewritten or blocked. As `SubagentStart` it claims that prompt and returns the same note hits and rules `prompt-recall.sh` would give it, as `hookSpecificOutput.additionalContext`, which Claude Code adds to the subagent's context before its first prompt ([hooks reference](https://code.claude.com/docs/en/hooks#subagentstart)). The stash exists because the `SubagentStart` payload carries `agent_id` and `agent_type` but not the prompt. A start claims the oldest stashed prompt from its session, preferring one of the same agent type; parallel spawns were observed to start in call order, and a stash older than two minutes is dropped. Rewriting the prompt with `PreToolUse` `updatedInput` was rejected: in auto mode Claude Code denies an `Agent` call whose input a hook changed after review. No session dedupe applies, since the subagent has not seen what the parent was shown, and the block is capped at 2000 characters. A resumed subagent gets nothing, because a resume makes no `Agent` call.

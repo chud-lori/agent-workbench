@@ -24,10 +24,10 @@ class InstallHooksTests(unittest.TestCase):
 
     def test_fresh_install_wires_every_hook(self) -> None:
         changes = install_hooks.install(self.settings)
-        self.assertEqual(len(changes), 6)
+        self.assertEqual(len(changes), 7)
         cfg = self.read()
         self.assertEqual(
-            set(cfg["hooks"]), {"SessionStart", "UserPromptSubmit", "Stop", "PreToolUse", "SubagentStart"}
+            set(cfg["hooks"]), {"SessionStart", "UserPromptSubmit", "Stop", "PreToolUse", "PostToolUse", "SubagentStart"}
         )
         session = cfg["hooks"]["SessionStart"][0]
         self.assertEqual(session["matcher"], "startup|resume|compact")

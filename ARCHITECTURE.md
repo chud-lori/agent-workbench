@@ -110,7 +110,10 @@ Per-repo metadata (dominant language by suffix count, present package files) fee
 | Storage | `sessions(session_id primary key, repo, branch, started_at)` in its own file, not the brain: a session row lives for hours, a note is meant to last |
 | Writer | `session-start.sh` calls `session-register <session_id> --cwd "$PWD"`. `repo` is `git rev-parse --show-toplevel` and `branch` the current branch, both null outside a repo |
 | Resume / compact | an upsert on `session_id`: repo and branch are refreshed, `started_at` keeps the first registration, so a resumed or compacted session stays one row |
-| Readers | none yet. `transcript_path` is not recorded and rows are never garbage-collected; both wait for the first feature that reads the table |
+| Claims | `claims(session_id, path, claimed_at)`, keyed on both. `claim-edit.sh` (PostToolUse on Edit, Write, MultiEdit, NotebookEdit) upserts the edited file's realpath, so a re-edit refreshes `claimed_at` |
+| Reader | `brief_task` only: a code hit whose file another session claimed within `CLAIM_TTL_SECONDS` (a week) adds a `warnings` line with the owner's short id and the claim's age. The caller's `session_id`, printed by `session-start.sh`, excludes its own claims. Warn-only, because a session that exits never releases its claims |
+| Expiry | each claim write deletes claims older than the TTL, and the reader ignores them. Session rows are never collected and `transcript_path` is not recorded |
+| Not the brain | no status, owner assignment or history: a claim is a lock with an expiry. Anything worth keeping is stored with `brain_remember` |
 
 ### Contextual rules (`rules.py` → same `.state/brain.sqlite`)
 
@@ -198,7 +201,7 @@ Two layers, with different guarantees:
   which sets `HOOK_PAYLOAD` and `HOOK_SESSION_ID` (the top-level `session_id`,
   kept only when it is a plain `[A-Za-z0-9_-]{1,64}` token, else empty).
 - `harness/hooks/session-start.sh`, wired as a Claude Code `SessionStart` hook:
-  records the session in the ledger (below), prints the 5 most recent brain notes to stdout (auto-injected into session context)
+  records the session in the ledger (below), prints its session id and the 5 most recent brain notes to stdout (auto-injected into session context)
   and kicks `refresh-index` as a detached background process. Resolves the workbench
   root from its own path, is best-effort at every step, and always exits 0 so it can
   never break session start.
@@ -216,6 +219,10 @@ Two layers, with different guarantees:
   `recall-brief` without session dedupe plus `rules-brief` as `additionalContext`,
   capped at 2000 characters. The stash exists because the `SubagentStart` payload
   has no prompt.
+- `harness/hooks/claim-edit.sh`, wired as `PostToolUse` on
+  `Edit|Write|MultiEdit|NotebookEdit`: pipes the payload to `claim-edit`, which
+  claims `tool_input.file_path` (or `notebook_path`) for the session in the
+  ledger. Prints nothing.
 
 **Prompt-scoped (Claude Code only).**
 - `harness/skills/*/SKILL.md` — symlinked into `~/.claude/skills/`. Skills answer

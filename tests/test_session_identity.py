@@ -55,7 +55,7 @@ class HookInputTests(unittest.TestCase):
         self.assertEqual(self._session_id(""), "")
 
     def test_every_hook_reads_stdin_through_the_shared_reader(self) -> None:
-        for name in ("session-start.sh", "prompt-recall.sh", "stop-memory-checkpoint.sh", "pretooluse-guard.sh"):
+        for name in ("session-start.sh", "prompt-recall.sh", "stop-memory-checkpoint.sh", "pretooluse-guard.sh", "claim-edit.sh"):
             text = (REPO / "harness" / "hooks" / name).read_text()
             self.assertIn("harness/hooks/lib/hook-input.sh", text, name)
             self.assertIn("read_hook_input", text, name)

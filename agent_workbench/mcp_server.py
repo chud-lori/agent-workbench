@@ -48,12 +48,13 @@ TOOLS: dict[str, dict[str, Any]] = {
         },
     },
     "brief_task": {
-        "description": "One-call orchestrated brief for a ticket/feature/phrase: merges code index hits, agent docs, saved brain notes, likely repos, and repo commands. A note list longer than 5 comes back as one-line summaries (id, kind, project, title, created date); fetch bodies with brain_recall ids=[...]. Results over ~10 KB drop whole items from the longest lists and set truncated.",
+        "description": "One-call orchestrated brief for a ticket/feature/phrase: merges code index hits, agent docs, saved brain notes, likely repos, and repo commands. Warns when another session edited a file in the code hits within the last week. A note list longer than 5 comes back as one-line summaries (id, kind, project, title, created date); fetch bodies with brain_recall ids=[...]. Results over ~10 KB drop whole items from the longest lists and set truncated.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string"},
                 "summary_only": {"type": "boolean", "description": "Force note summaries (true) or full bodies (false). Default: summaries when a list has more than 5 notes"},
+                "session_id": {"type": "string", "description": "This session's id, printed at session start, so its own file claims are not reported back"},
             },
             "required": ["query"],
             "additionalProperties": False,
@@ -443,7 +444,7 @@ def _brain_recall(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _brief_task(args: dict[str, Any]) -> dict[str, Any]:
-    result = brief_task(args.get("query", ""), default_config())
+    result = brief_task(args.get("query", ""), default_config(), args.get("session_id"))
     for key in ("brain_notes", "pinned_references"):
         _summarise(result, key, args.get("summary_only"))
     return result

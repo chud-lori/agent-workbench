@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import calendar
+import os
 import re
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -90,8 +93,11 @@ def context_for_path(path_text: str, config: WorkbenchConfig | None = None) -> d
 _PROD_HINT = re.compile(r"\b(prod|production|live|deploy|deployed|hotfix|rollback|incident)\b", re.IGNORECASE)
 
 
-def brief_task(query: str, config: WorkbenchConfig | None = None) -> dict[str, Any]:
-    """One-call orchestrated brief: code index + agent docs + brain notes + repo commands."""
+def brief_task(query: str, config: WorkbenchConfig | None = None, session_id: str | None = None) -> dict[str, Any]:
+    """One-call orchestrated brief: code index + agent docs + brain notes + repo commands.
+
+    session_id is the caller's own session, so its claims are not reported back to it.
+    """
     config = config or default_config()
     from .brain import recall
     from .code_index import code_search, index_status
@@ -118,6 +124,7 @@ def brief_task(query: str, config: WorkbenchConfig | None = None) -> dict[str, A
     warnings: list[str] = []
     if code_hits.get("warning"):
         warnings.append(code_hits["warning"])
+    warnings.extend(_claim_warnings(brief["code_hits"], session_id, config))
     if _PROD_HINT.search(query):
         from .repo_state import repo_state
 
@@ -133,6 +140,18 @@ def brief_task(query: str, config: WorkbenchConfig | None = None) -> dict[str, A
     if warnings:
         brief["warnings"] = warnings
     return brief
+
+
+def _claim_warnings(code_hits: list[dict[str, Any]], session_id: str | None, config: WorkbenchConfig) -> list[str]:
+    from .ledger import STAMP, open_claims
+
+    shown = {os.path.realpath(Path(hit["repo_path"]) / hit["path"]): f"{Path(hit['repo_path']).name}/{hit['path']}" for hit in code_hits}
+    warnings = []
+    for claim in open_claims(list(shown), session_id, config):
+        minutes = int(time.time() - calendar.timegm(time.strptime(claim["claimed_at"], STAMP))) // 60
+        age = f"{minutes} minutes" if minutes < 120 else f"{minutes // 60} hours"
+        warnings.append(f"another session ({claim['session_id'][:8]}) claimed {shown[claim['path']]} {age} ago")
+    return warnings
 
 
 def find_service_context(service_name: str, config: WorkbenchConfig | None = None) -> dict[str, Any]:
