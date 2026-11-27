@@ -27,17 +27,16 @@ Resolve the argument to `repo + file + line range`. A bare symbol name: find it 
 
 ## 3. Climb the chain
 
-**Resolve exact keys first.** Before searching in parallel or briefing a subagent, resolve each named person, repo, ticket and channel to an exact key (account id, author email, `org/repo`, ticket key, channel id), say how you confirmed it, and use only that key in every search and brief, never a looser name match. If a key returns a different count than the name did, find out why before going on.
+**Read `~/.config/agent-workbench/fan-out-and-verify.md` before gathering.** It holds the convention every evidence skill shares: resolve exact keys first, gather in parallel, name any source that is absent or unauthenticated, never surface raw Slack ids, verify before presenting, cite a surface for every line, and do not store the output.
 
 For each shaping commit, in parallel where possible:
 
 - **Commit → PR:** `gh api "repos/<org>/<repo>/commits/<sha>/pulls"` (quote the URL — unquoted `?`/`=` break zsh). The PR body and review comments are where the alternatives-considered live.
 - **PR/branch/commit → ticket:** extract the ticket key from the title, branch name, or message; pull it via the Jira MCP. The ticket carries the *requirement*; the PR carries the *implementation choice*. Both are halves of the why.
-- **Ticket/date → Slack:** `slack_search_messages` with the ticket key or distinctive keywords, bounded with `on:`/`after:`/`before:` around the commit date. Decisions that never made it into the PR live here. **Never surface raw user IDs (U0…)** — resolve names with `slack_get_user` first.
-- **A missing source is a hole in the chain, not a dead end.** If `gh` is absent
-  or unauthenticated, or a connector is not installed, keep climbing the links
-  you do have and name the one you could not follow: "the PR is unreachable from
-  here" is a finding. An unmentioned gap reads as "there was nothing there".
+- **Ticket/date → Slack:** `slack_search_messages` with the ticket key or distinctive keywords, bounded with `on:`/`after:`/`before:` around the commit date. Decisions that never made it into the PR live here.
+- **A missing source is a hole in the chain, not a dead end.** Keep climbing the
+  links you do have and name the one you could not follow: "the PR is unreachable
+  from here" is a finding.
 - **Brain:** `brain_recall` with the ticket key, file name, and topic — a stored decision note may answer the question in one hop and name who agreed.
 
 ## 4. Answer

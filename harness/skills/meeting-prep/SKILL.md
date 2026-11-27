@@ -15,13 +15,11 @@ From the event, extract the topic keywords (title + description), the attendee l
 
 ## 2. Gather — all sources, in parallel
 
-**Resolve exact keys first.** Before searching in parallel or briefing a subagent, resolve each named person, repo, ticket and channel to an exact key (account id, author email, `org/repo`, ticket key, channel id), say how you confirmed it, and use only that key in every search and brief, never a looser name match. If a key returns a different count than the name did, find out why before going on.
-
-Skip an unavailable source and **say so in the brief**.
+**Read `~/.config/agent-workbench/fan-out-and-verify.md` before gathering.** It holds the convention every evidence skill shares: resolve exact keys first, gather in parallel, name any source that is absent or unauthenticated, never surface raw Slack ids, verify before presenting, cite a surface for every line, and do not store the output.
 
 - **The event itself:** agenda in the description; linked Google Docs via `docs_get_text` / `workspace_get_from_url` — an agenda doc with comments is often the whole prep.
 - **Last time** (recurring meetings): `calendar_list_events` over the past few weeks for the same title, then search Slack around that date for notes or follow-ups. "What we said last time" is the most valuable section of the brief.
-- **Slack:** `slack_search_messages` with the topic keywords, bounded to the recent window (`after:`); plus threads involving the organizer on the topic. **Never surface raw user IDs (U0…)** — resolve every name with `slack_get_user` before it appears in the brief. Attendee emails from the calendar resolve to Slack names the same way.
+- **Slack:** `slack_search_messages` with the topic keywords, bounded to the recent window (`after:`); plus threads involving the organizer on the topic. Resolve attendee emails from the calendar to Slack names with `slack_get_user`.
 - **Jira:** JQL on the topic/project for tickets moved recently or blocked — the tickets attendees are likely to bring up.
 - **Git/PRs** (when the meeting is about a workstream): `recent_activity` and `gh search prs` scoped to the topic since the last occurrence — what actually shipped versus what was promised.
 - **Brain:** `brain_recall` on the topic keywords (add `thread=` if the storyline has a tag) — recorded decisions and open todos about this exact topic, with who agreed.
@@ -30,9 +28,7 @@ Skip an unavailable source and **say so in the brief**.
 
 The brief states facts people will act on in front of each other — the embarrassment cost of a wrong line is high:
 
-- A decision is only "decided" if the thread shows agreement — your own sent message proposing it does not count. Read replies before writing "we agreed".
 - Check ticket status live rather than trusting a Slack claim from last week.
-- Attribute positions to the right person, by name.
 
 ## 4. Format — one page, five sections
 
@@ -46,4 +42,4 @@ Plain text, paste-ready, no fluff. If a section has nothing, drop it.
 
 ## 5. Do not store the brief
 
-A brief is about one hour of one day. If prep surfaces something durable — a decision you'd forgotten was made, a commitment with a date — that is a normal `brain_remember` with its source thread, separate from the brief.
+A brief is about one hour of one day; the convention's storage rule applies as written.

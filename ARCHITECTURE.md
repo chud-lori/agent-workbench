@@ -223,7 +223,9 @@ Two layers, with different guarantees:
   `/brain-harvest`, `/postmortem`, `/why`, `/meeting-prep`, `/pr-review`, and
   `/voice`. Most share one shape: resolve named entities to exact keys, gather
   from every source in parallel, verify before presenting, cite a surface per
-  line. `/voice` is the exception worth
+  line, written once in `harness/skills/fan-out-and-verify.md` (copied to
+  `~/.config/agent-workbench/` by setup.sh) and pointed at from each skill.
+  `/voice` is the exception worth
   noting — it drafts in the user's own voice and stores what it learns as
   audience-scoped contextual rules rather than a profile of its own, so
   `brain_context audience:<name>` *is* the profile and there is no second

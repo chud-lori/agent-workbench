@@ -17,15 +17,12 @@ Establish three anchors before gathering — ask the user for whatever is missin
 
 ## 2. Gather — all sources, in parallel
 
-**Resolve exact keys first.** Before searching in parallel or briefing a subagent, resolve each named person, repo, ticket and channel to an exact key (account id, author email, `org/repo`, ticket key, channel id), say how you confirmed it, and use only that key in every search and brief, never a looser name match. If a key returns a different count than the name did, find out why before going on.
-
-Skip any unavailable source and **say so in the draft** — a silently missing source reads as "nothing happened there."
+**Read `~/.config/agent-workbench/fan-out-and-verify.md` before gathering.** It holds the convention every evidence skill shares: resolve exact keys first, gather in parallel, name any source that is absent or unauthenticated, never surface raw Slack ids, verify before presenting, cite a surface for every line, and do not store the output.
 
 **Slack — the human timeline:**
 
 - `slack_get_channel_history` on the incident channel for the window; `slack_get_thread_replies` on every thread that contains a decision, a page, or a "fixed it" claim.
 - `slack_search_messages` with the service name and error strings bounded by `on:`/`before:`/`after:` to catch discussion outside the incident channel — early warnings often live in a team channel days earlier.
-- **Never surface raw user IDs (U0…).** Resolve every participant to a real name with `slack_get_user` before they appear in the timeline.
 
 **Git — what changed and when** (`agent-workbench` MCP):
 

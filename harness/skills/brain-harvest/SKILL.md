@@ -15,9 +15,9 @@ Default: last **7 days**. The argument overrides: `/brain-harvest 14d`, `/brain-
 
 ## 2. Gather (run sources in parallel)
 
-**Resolve exact keys first.** Before searching in parallel or briefing a subagent, resolve each named person, repo, ticket and channel to an exact key (account id, author email, `org/repo`, ticket key, channel id), say how you confirmed it, and use only that key in every search and brief, never a looser name match. If a key returns a different count than the name did, find out why before going on.
+**Read `~/.config/agent-workbench/fan-out-and-verify.md` before gathering.** It holds the convention every evidence skill shares: resolve exact keys first, gather in parallel, name any source that is absent or unauthenticated, never surface raw Slack ids, verify before presenting, cite a surface for every line.
 
-If a source is unavailable (gh unauthenticated, MCP absent), skip it and say so in the final summary — don't abort the harvest.
+Storage here is the approval gate below, not the convention's storage rule.
 
 **Merged PRs (gh CLI):**
 
@@ -36,7 +36,7 @@ For PRs that look knowledge-bearing, pull the why: `gh pr view <url> --json body
 
 Request minimal fields (`summary`, `status`, `resolution`, `project`, `updated`) — responses are verbose. Fetch full description/comments only for tickets that look knowledge-bearing.
 
-**Slack:** search `from:me after:SINCE` (the `from:me` form is what works; searching by handle/email does not). Volume can be hundreds of messages — do NOT read them all. Skim in pages, cluster by channel/thread, and pull `slack_get_thread_replies` only for threads that smell like decisions, incidents, root causes, or ops changes. Resolve every raw user ID (U0…) to a real name via `slack_get_user` or the roster reference notes before showing anything to the user.
+**Slack:** search `from:me after:SINCE` (the `from:me` form is what works; searching by handle/email does not). Volume can be hundreds of messages — do NOT read them all. Skim in pages, cluster by channel/thread, and pull `slack_get_thread_replies` only for threads that smell like decisions, incidents, root causes, or ops changes.
 
 ## 3. Filter — what counts as durable
 

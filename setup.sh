@@ -243,6 +243,15 @@ else
   info "installed review-rules.md at $RULES_DST (readable without loading the skill)."
 fi
 
+FANOUT_SRC="$WORKBENCH/harness/skills/fan-out-and-verify.md"
+FANOUT_DST="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/fan-out-and-verify.md"
+if cmp -s "$FANOUT_SRC" "$FANOUT_DST"; then
+  info "fan-out-and-verify.md already current at $FANOUT_DST."
+else
+  cp "$FANOUT_SRC" "$FANOUT_DST"
+  info "installed fan-out-and-verify.md at $FANOUT_DST (the evidence skills point here)."
+fi
+
 DISCIPLINE_SRC="$WORKBENCH/harness/coding-discipline.md"
 DISCIPLINE_DST="${XDG_CONFIG_HOME:-$HOME/.config}/agent-workbench/coding-discipline.md"
 mkdir -p "$(dirname "$DISCIPLINE_DST")"
