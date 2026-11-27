@@ -9,6 +9,7 @@ from .code_index import code_search, codebase_overview, index_status, rebuild_in
 from .config import WorkbenchConfig, default_config
 from .knowledge import brief_task, context_for_path, find_service_context, search_knowledge
 from .mcp_server import serve
+from .prompt_recall import prompt_hits
 from .repo_state import repo_state
 from .rules import context_view, remember_rule, rule_feedback, rules_in_force
 from .scanners import doctor_report, format_report, mcp_health, report_json
@@ -119,15 +120,15 @@ def main(argv: list[str] | None = None) -> int:
     rule_context_cmd = sub.add_parser("rule-context", help="Rules and health flags for one context key")
     rule_context_cmd.add_argument("key")
 
-    rules_brief_cmd = sub.add_parser(
-        "rules-brief", help="Compact rules-in-force lines for a prompt (used by the UserPromptSubmit hook)"
+    sub.add_parser(
+        "rules-brief", help="Compact lines for the rules whose scope matches this repo (used by the UserPromptSubmit hook)"
     )
-    rules_brief_cmd.add_argument("prompt")
 
     recall_brief_cmd = sub.add_parser(
         "recall-brief", help="Compact top-hit note lines for a prompt (used by the UserPromptSubmit hook)"
     )
     recall_brief_cmd.add_argument("prompt")
+    recall_brief_cmd.add_argument("--session", default=None, help="Hook session_id; a note is not repeated within it")
 
     repo_state_cmd = sub.add_parser("repo-state", help="Show a repo's branch/divergence vs origin/main")
     repo_state_cmd.add_argument("repo")
@@ -213,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
     elif args.command == "recall-brief":
-        brief_text = _recall_brief(args.prompt, config)
+        brief_text = _recall_brief(args.prompt, config, args.session)
         if brief_text:
             print(brief_text)
     elif args.command == "rule":
@@ -225,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "rule-context":
         print(dump_json(context_view(args.key, config)))
     elif args.command == "rules-brief":
-        brief_text = _rules_brief(args.prompt, config)
+        brief_text = _rules_brief(config)
         if brief_text:
             print(brief_text)
     elif args.command == "repo-state":
@@ -245,12 +246,12 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _rules_brief(prompt: str, config: WorkbenchConfig) -> str:
-    """Rules in force for the current context, as compact lines for a hook.
+def _rules_brief(config: WorkbenchConfig) -> str:
+    """Rules whose scope matches the current repo and branch, as compact lines for a hook.
 
-    Not threshold-gated the way note recall is. A rule is already scoped, so it
-    only fires where it belongs, and the short prompts that inject no notes
-    ("yes", "go") are exactly the ones where an unrepeated rule gets forgotten.
+    Matched on scope only: trigger words are common enough to fire a rule on
+    unrelated prompts. Not threshold-gated, because the short prompts that
+    inject no notes ("yes", "go") are where an unrepeated rule gets forgotten.
     """
     import subprocess
 
@@ -276,7 +277,7 @@ def _rules_brief(prompt: str, config: WorkbenchConfig) -> str:
                 context.append(f"branch:{branch.stdout.strip()}")
     except (OSError, subprocess.SubprocessError):
         pass
-    report = rules_in_force(prompt=prompt.strip()[:400], context=context, limit=5, config=config)
+    report = rules_in_force(context=context, limit=5, config=config)
     found = report.get("rules") or []
     if not found:
         return ""
@@ -289,11 +290,12 @@ def _rules_brief(prompt: str, config: WorkbenchConfig) -> str:
     return "\n".join(lines)
 
 
-def _recall_brief(prompt: str, config: WorkbenchConfig) -> str:
+def _recall_brief(prompt: str, config: WorkbenchConfig, session_id: str | None = None) -> str:
     """Top brain hits for a user prompt, as compact one-liners.
 
     Threshold-gated so trivial prompts ("yes", "go") inject nothing: the prompt
-    must carry at least two distinctive terms. Full note bodies stay pull-based
+    must carry at least two distinctive terms, and prompt_hits applies the
+    relevance floor and per-session dedupe. Full note bodies stay pull-based
     via brain_recall — this only surfaces ids and hooks.
     """
     import re as _re
@@ -302,8 +304,7 @@ def _recall_brief(prompt: str, config: WorkbenchConfig) -> str:
     distinctive = _re.findall(r"[A-Za-z0-9_/-]{4,}", prompt)
     if len(set(term.lower() for term in distinctive)) < 2:
         return ""
-    report = recall(query=prompt, limit=5, config=config)
-    notes = report.get("notes") or []
+    notes = prompt_hits(prompt, session_id=session_id, limit=5, config=config)
     if not notes:
         return ""
     lines = ["Possibly relevant brain notes (brain_recall <id/query> for full text):"]
