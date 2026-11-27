@@ -28,6 +28,8 @@ HOOK_SPECS = [
     ("UserPromptSubmit", None, "prompt-recall.sh", 10, "Recalling brain notes"),
     ("Stop", None, "stop-memory-checkpoint.sh", 10, "Memory checkpoint"),
     ("PreToolUse", "Bash", "pretooluse-guard.sh", 10, "Guard check"),
+    ("PreToolUse", "Agent", "subagent-recall.sh", 10, "Stashing subagent prompt"),
+    ("SubagentStart", None, "subagent-recall.sh", 10, "Recalling brain notes for subagent"),
 ]
 
 
