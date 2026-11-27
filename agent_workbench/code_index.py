@@ -199,6 +199,13 @@ def refresh_index(config: WorkbenchConfig | None = None, roots: list[str] | None
             for rel in set(existing) - seen:
                 conn.execute("delete from documents where repo_path=? and path=?", (str(repo), rel))
                 deleted += 1
+        # Repos under these roots that are gone from disk would otherwise stay searchable forever.
+        live = {str(repo) for repo in repos}
+        for row in conn.execute("select path from repos").fetchall():
+            path = Path(row["path"])
+            if row["path"] not in live and any(path == root or root in path.parents for root in root_paths):
+                deleted += conn.execute("delete from documents where repo_path=?", (row["path"],)).rowcount
+                conn.execute("delete from repos where path=?", (row["path"],))
         conn.commit()
         return {
             "index_path": str(config.index_path),

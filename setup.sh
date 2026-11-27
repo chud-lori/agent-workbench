@@ -28,6 +28,12 @@ ask() {
   [ "$reply" = "y" ] || [ "$reply" = "Y" ]
 }
 
+# True when a plugin or skill of this name is already installed for Claude Code.
+already_installed() {
+  grep -q "\"$1@" "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null \
+    || [ -e "$HOME/.claude/skills/$1/SKILL.md" ] || [ -e "$HOME/.agents/skills/$1/SKILL.md" ]
+}
+
 # Insert (or refresh) the standing-instructions block in an instruction file,
 # fenced by markers so uninstall.sh can strip it and re-runs stay current.
 install_instructions() {
@@ -301,7 +307,7 @@ fi
 if [ "$DO_CLAUDE" = "y" ]; then
   step "Companion plugins (optional)"
   if command -v node >/dev/null 2>&1 && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 18 ]; then
-    if grep -q '"caveman@' "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null; then
+    if already_installed caveman; then
       info "caveman: already installed - skipped."
     elif ask "Install caveman (concise agent output, github.com/JuliusBrussee/caveman)?" "n"; then
       # Run from $HOME: with a repo as CWD the installer also writes per-repo
@@ -311,7 +317,7 @@ if [ "$DO_CLAUDE" = "y" ]; then
       (cd "$HOME" && curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash) \
         && info "caveman installed." || info "caveman install failed - re-run its installer manually."
     fi
-    if [ -e "$HOME/.claude/skills/security-audit/SKILL.md" ]; then
+    if already_installed security-audit; then
       info "security-audit: already installed - skipped."
     elif ask "Install the security-audit skill (multi-phase codebase audit, github.com/cloudflare/security-audit-skill)?" "n"; then
       # Installs to ~/.agents/skills (the skills CLI's own universal dir) and
@@ -325,9 +331,13 @@ if [ "$DO_CLAUDE" = "y" ]; then
   else
     info "node >=18 not found - skipping companion plugin offers (caveman and security-audit need it)."
   fi
-  info "ponytail (minimalist code generation) installs from inside Claude Code - two separate prompts:"
-  info "  /plugin marketplace add DietrichGebert/ponytail"
-  info "  /plugin install ponytail@ponytail"
+  if already_installed ponytail; then
+    info "ponytail: already installed - skipped."
+  else
+    info "ponytail (minimalist code generation) installs from inside Claude Code - two separate prompts:"
+    info "  /plugin marketplace add DietrichGebert/ponytail"
+    info "  /plugin install ponytail@ponytail"
+  fi
 fi
 
 # --- Prerequisites report -------------------------------------------------------
@@ -363,11 +373,20 @@ fi
 
 # --- Code index ------------------------------------------------------------------
 step "Code index"
-ROOTS=$(cd "$WORKBENCH" && python3 -c 'from agent_workbench.config import DEFAULT_INDEX_ROOTS as r; print(", ".join(str(p) for p in r))')
-info "index roots: $ROOTS (set AGENT_WORKBENCH_INDEX_ROOTS before re-running to change them)"
+index_roots() { (cd "$WORKBENCH" && python3 -c 'from agent_workbench.config import load_index_roots as r; print(":".join(str(p) for p in r()))'); }
+info "index roots: $(index_roots)"
+if [ -n "${AGENT_WORKBENCH_INDEX_ROOTS:-}" ]; then
+  info "set by AGENT_WORKBENCH_INDEX_ROOTS - unset it to manage the saved list here."
+elif [ -t 0 ]; then
+  read -r -p "Add folders to index (colon-separated, Enter to keep the list): " extra_roots
+  if [ -n "$extra_roots" ]; then
+    (cd "$WORKBENCH" && python3 -c 'import sys; from agent_workbench.config import save_index_roots; save_index_roots(sys.argv[1].split(":"))' "$extra_roots")
+    info "index roots: $(index_roots)"
+  fi
+fi
 if [ -f "$WORKBENCH/.state/index.sqlite" ]; then
-  # A refresh only re-reads changed files; a rebuild would drop and re-read everything.
-  if ask "Refresh the existing code index (changed files only)?" "y"; then
+  # A refresh adds new roots and changed files and keeps the rest; a rebuild would drop and re-read everything.
+  if ask "Refresh the code index (new folders and changed files only)?" "y"; then
     python3 "$WORKBENCH/run_cli.py" refresh-index
   fi
 elif ask "Build the code index now?" "y"; then
