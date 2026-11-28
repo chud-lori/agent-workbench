@@ -326,6 +326,6 @@ cap) and `max_search_results` (50 — default `search_knowledge` limit).
   repo hunting across the disk.
 - **No LLM calls, no network calls.** Purely local filesystem + SQLite (the only
   subprocesses are `git` status reads in `work_sources`). The opt-in `graph` command
-  listens on 127.0.0.1 while it runs and makes no outbound connection.
+  listens on 127.0.0.1 while it runs, makes no outbound connection, and opens the local browser unless `--no-open` is passed.
 - **No daemon.** The index is a snapshot refreshed on demand (CLI, MCP tool, or the
   SessionStart hook), not a file watcher.

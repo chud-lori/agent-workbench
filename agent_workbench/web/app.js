@@ -199,7 +199,8 @@
     fillList($('cited-list'), $('cited-title'), 'Most cited', cited, 'No note in view is cited by another.');
     const orphans = visible.nodes.filter((node) => !linked.has(node.id)).map((node) => noteItem(node));
     fillList($('orphans-list'), $('orphans-title'), 'Orphans', orphans, 'Every note in view links to another.');
-    const dangling = data.dangling.filter((entry) => byId.has(entry.from))
+    const shownIds = new Set(visible.nodes.map((node) => node.id));
+    const dangling = data.dangling.filter((entry) => shownIds.has(entry.from))
       .map((entry) => noteItem(byId.get(entry.from), 'cites #' + entry.to + ', which does not exist'));
     fillList($('dangling-list'), $('dangling-title'), 'Missing references', dangling, 'Every reference points to a real note.');
   }

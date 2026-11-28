@@ -72,7 +72,7 @@ Twenty-five tools, each with a CLI twin. The reference below mirrors the `TOOLS`
 - `brain_promote` (CLI `promote`) - append a proven personal note to a shared, git-versioned markdown file, and stamp it so it promotes once
 - `brain_resolve` / `brain_forget` (CLI `resolve` / `forget`) - mark done (kept, hidden from default recall) / delete
 - `brain_export` (CLI `export`) - dump all notes to markdown. The index is rebuildable; the brain is not, so this is the backup
-- `brain_graph` (CLI `graph`) - how notes link through inline references (`gotcha#7`, `brain#42`) and supersedes chains. The MCP tool returns counts only: orphan notes, references to ids that do not exist, and the most-cited notes. The CLI serves a read-only graph on 127.0.0.1 (see [Brain graph](#brain-graph))
+- `brain_graph` (CLI `graph`) - how notes link through inline references (`gotcha#7`, `brain#42`) and supersedes chains. The MCP tool returns no note bodies: counts and sample ids of orphan notes and of references to ids that do not exist, and the ids and first lines of the most-cited notes. The CLI serves a read-only graph on 127.0.0.1 (see [Brain graph](#brain-graph))
 
 **Code index and docs:**
 
@@ -183,7 +183,7 @@ python3 run_cli.py graph --no-open --port 8765
 python3 run_cli.py graph --export graph.html  # one self-contained file, no server
 ```
 
-Notes are nodes, coloured by kind and sized by how often they are cited. An edge is an inline reference (`<kind>#<id>` or `brain#<id>`) to a note that exists, or a supersedes link when superseded notes are shown. References to ids that do not exist are listed, not drawn. Project, kind, tag, date, resolved and superseded are filters; the search box runs the same FTS query as `brain_recall`. Clicking a note opens its full text and its links in both directions, and focus mode keeps one note and up to three hops around it, which is the usable view on a brain of a few thousand notes.
+Notes are nodes, coloured by kind and sized by how often they are cited. An edge is an inline reference (`<kind>#<id>` or `brain#<id>`) to a note that exists, or a supersedes link when superseded notes are shown. References to ids that do not exist are listed, not drawn. Project, kind, tag, date, resolved and superseded are filters; the search box runs the same FTS query as `brain_recall` (an `--export` file has no server, so it matches plain substrings instead). Clicking a note opens its full text and its links in both directions, and focus mode keeps one note and up to three hops around it, which is the usable view on a brain of a few thousand notes.
 
 The page is read-only by construction. The server binds 127.0.0.1 with no option to bind anything else, requires the random token from the printed URL on every request, refuses any `Host` other than `127.0.0.1:<port>` or `localhost:<port>` (DNS rebinding), answers GET and HEAD only, and opens the brain with SQLite `mode=ro`. Note bodies load on click and are rendered as text, never HTML, under a Content-Security-Policy with no inline script. The renderer is [force-graph](https://github.com/vasturiano/force-graph) 1.52.0 (MIT), vendored under `agent_workbench/web/vendor/` with its sha256 checked by a test, so the page loads nothing from a CDN.
 
