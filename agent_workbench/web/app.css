@@ -118,7 +118,7 @@ button.ref {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 24rem;
+  grid-template-columns: minmax(0, 1fr) clamp(16rem, 24vw, 21rem);
 }
 
 .stage { position: relative; min-height: 0; overflow: hidden; background: var(--surface); }
@@ -140,21 +140,24 @@ button.ref {
 
 .hover {
   position: absolute;
-  left: 0.75rem;
-  bottom: 0.5rem;
-  right: 0.75rem;
-  margin: 0;
-  color: var(--ink-2);
-  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  max-width: 20rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
   pointer-events: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
+.hover[hidden] { display: none; }
+.hover small { color: var(--ink-2); }
 
 .panel {
   overflow: auto;
-  padding: 1rem;
+  padding: 0.75rem;
+  font-size: 0.8rem;
   border-left: 1px solid var(--line);
 }
 .panel section { margin-bottom: 1.5rem; }
@@ -166,18 +169,21 @@ button.ref {
 .panel .empty { color: var(--ink-2); margin: 0.25rem 0; }
 
 .note-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-.note-head h2 { display: flex; align-items: center; gap: 0.4rem; margin: 0; }
-.note-meta { display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.75rem; margin: 0.75rem 0; font-size: 0.85rem; }
+.note-head h2 { display: flex; align-items: center; gap: 0.4rem; margin: 0; font-size: 0.85rem; }
+#note-title:focus:not(:focus-visible) { outline: none; }
+.note-meta { display: grid; grid-template-columns: auto 1fr; gap: 0.1rem 0.6rem; margin: 0.6rem 0; }
 .note-meta dt { color: var(--ink-2); }
 .note-meta dd { margin: 0; overflow-wrap: anywhere; }
-.focus-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+.focus-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+@media (pointer: fine) { .panel button, .panel select { min-height: 1.75rem; } }
 .note-body {
   margin: 0.75rem 0 0;
   padding: 0.75rem 0 0;
   border-top: 1px solid var(--line);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  line-height: 1.5;
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 
 .visually-hidden {
