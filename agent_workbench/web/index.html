@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Brain graph</title>
+<link rel="icon" href="data:,">
+<!--head-->
+</head>
+<body>
+<header class="bar">
+  <h1>Brain graph</h1>
+  <form id="search-form" role="search">
+    <label for="search" class="visually-hidden">Search notes</label>
+    <input id="search" type="search" placeholder="Search notes" autocomplete="off">
+  </form>
+  <p id="summary" role="status">Loading the graph…</p>
+</header>
+<div class="filters" role="group" aria-label="Filters">
+  <label>Project <select id="project"><option value="">All</option></select></label>
+  <label>Tag <input id="tag" list="tag-list" size="12" autocomplete="off"></label>
+  <datalist id="tag-list"></datalist>
+  <label>From <input id="since" type="date"></label>
+  <label>To <input id="until" type="date"></label>
+  <label><input id="resolved" type="checkbox"> Resolved</label>
+  <label><input id="superseded" type="checkbox"> Superseded</label>
+  <label>Colour by <select id="colour"><option value="kind">Kind</option><option value="project">Project</option></select></label>
+  <button id="clear" type="button">Clear filters</button>
+  <div id="kinds" class="key" role="group" aria-label="Kinds"></div>
+  <div id="project-key" class="key" aria-label="Project colours"></div>
+</div>
+<main class="layout">
+  <div class="stage">
+    <div id="graph"></div>
+    <div id="stage-message" class="stage-message" role="status">Loading the graph…</div>
+    <p id="hover" class="hover" aria-hidden="true"></p>
+  </div>
+  <aside class="panel" aria-label="Details">
+    <section id="note" hidden>
+      <div class="note-head">
+        <h2 id="note-title" tabindex="-1"></h2>
+        <button id="note-close" type="button">Close</button>
+      </div>
+      <dl class="note-meta" id="note-meta"></dl>
+      <div class="focus-row">
+        <button id="focus" type="button">Focus on this note</button>
+        <label>Hops <select id="hops"><option>1</option><option selected>2</option><option>3</option></select></label>
+      </div>
+      <pre id="note-body" class="note-body"></pre>
+      <div id="note-links"></div>
+    </section>
+    <section id="results" hidden>
+      <h2 id="results-title"></h2>
+      <ol id="results-list"></ol>
+    </section>
+    <section id="health">
+      <h2>Health</h2>
+      <details open><summary id="cited-title">Most cited</summary><ol id="cited-list"></ol></details>
+      <details><summary id="orphans-title">Orphans</summary><ol id="orphans-list"></ol></details>
+      <details><summary id="dangling-title">Missing references</summary><ol id="dangling-list"></ol></details>
+    </section>
+  </aside>
+</main>
+<!--scripts-->
+</body>
+</html>

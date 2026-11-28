@@ -7,6 +7,7 @@ from .activity import recent_activity
 from .brain import amend, export, forget, promote, recall, remember, resolve
 from .code_index import code_search, codebase_overview, index_status, rebuild_index, refresh_index
 from .config import WorkbenchConfig, default_config
+from .graph_server import export_html as export_graph, serve as serve_graph
 from .knowledge import brief_task, context_for_path, find_service_context, search_knowledge
 from .ledger import claim_path, register_session
 from .mcp_server import serve
@@ -164,6 +165,11 @@ def main(argv: list[str] | None = None) -> int:
     export_cmd = sub.add_parser("export", help="Export all brain notes as markdown")
     export_cmd.add_argument("--out", default=None, help="Optional file path; prints markdown to stdout when omitted")
 
+    graph_cmd = sub.add_parser("graph", help="Serve a read-only graph of the brain on 127.0.0.1")
+    graph_cmd.add_argument("--port", type=int, default=0, help="Port on 127.0.0.1 (default: any free port)")
+    graph_cmd.add_argument("--no-open", action="store_true", help="Print the URL without opening a browser")
+    graph_cmd.add_argument("--export", default=None, metavar="FILE", help="Write one self-contained HTML file instead of serving")
+
     sub.add_parser("mcp-server", help="Run stdio MCP server")
 
     args = parser.parse_args(argv)
@@ -272,6 +278,18 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "export":
         report = export(args.out, config)
         print(dump_json(report) if args.out else report["markdown"])
+    elif args.command == "graph":
+        if not args.export:
+            return serve_graph(config, args.port, not args.no_open)
+        report = export_graph(config, args.export)
+        if report.get("error"):
+            print(f"Error: {report['error']}")
+            return 1
+        print(
+            f"Wrote {report['notes']} notes and {report['edges']} links to {report['path']}.\n"
+            "Warning: the file holds the full text of every exported note, resolved and superseded included. "
+            "Share it only where you would share the brain itself."
+        )
     elif args.command == "mcp-server":
         return serve()
     return 0

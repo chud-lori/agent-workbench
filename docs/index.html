@@ -300,7 +300,7 @@ footer p { margin-top: 10px; max-width: 72ch; }
     <img src="logo.svg" alt="Agent Workbench logo: a node mesh above a bench, with one lit core node" width="76" height="76">
     <h1>Memory and context that survives the session</h1>
     <p class="sub">Agent Workbench is a local MCP server and CLI. It gives every agent session on your machine a persistent cross-tool brain, a full-text index of your repos, and a report on whether its own setup is broken.</p>
-    <p class="facts"><strong>20</strong> MCP tools, each with a CLI twin. Stdlib-only Python, no third-party packages. No LLM calls and no network calls: every import is from the standard library, and none of them opens a socket.</p>
+    <p class="facts"><strong>25</strong> MCP tools, each with a CLI twin. Stdlib-only Python, no third-party packages. No LLM calls and no network calls. The one socket it opens is the optional graph view, served on 127.0.0.1 only when you run it.</p>
     <div class="actions">
       <a class="action primary" href="#install">Read the install steps</a>
       <a class="action" href="https://github.com/chud-lori/agent-workbench">Source on GitHub</a>
@@ -384,7 +384,7 @@ cd agent-workbench
     <div class="filterbar">
       <label for="tool-filter">Filter</label>
       <input id="tool-filter" type="search" placeholder="Filter needs JavaScript" autocomplete="off" disabled aria-describedby="filter-status">
-      <span id="filter-status" role="status">Filter is starting. All 24 tools are listed below.</span>
+      <span id="filter-status" role="status">Filter is starting. All 25 tools are listed below.</span>
     </div>
 
     <div id="tool-list">
@@ -425,6 +425,10 @@ cd agent-workbench
         <div class="tool">
           <div class="head"><span class="mcp">brain_export</span> <span class="twin">CLI: <code>run_cli.py export</code></span></div>
           <p>Dump every note, resolved ones included, as markdown, optionally straight to a file. This is the backup: the brain is the only part of the state directory that cannot be rebuilt.</p>
+        </div>
+        <div class="tool">
+          <div class="head"><span class="mcp">brain_graph</span> <span class="twin">CLI: <code>run_cli.py graph</code></span></div>
+          <p>How notes link to each other through inline references like <code>gotcha#7</code> and supersedes chains: orphan notes nothing links to or from, references to ids that do not exist, and the most-cited notes. The MCP tool returns those counts only. The CLI command serves a read-only graph of the brain on 127.0.0.1, behind a random token in the printed URL, with search, filters, a side panel per note, and a focus mode for one note and its neighbours. <code>--export graph.html</code> writes one self-contained file instead, which holds the full text of every note.</p>
         </div>
       </div>
 

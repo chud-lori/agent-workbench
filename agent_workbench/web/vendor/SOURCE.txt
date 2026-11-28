@@ -1,0 +1,1 @@
+force-graph 1.52.0, dist/force-graph.min.js from https://cdn.jsdelivr.net/npm/force-graph@1.52.0/dist/force-graph.min.js (MIT, see force-graph.LICENSE; the bundle includes its d3, kapsule, float-tooltip and lodash-es dependencies under their own permissive licences).

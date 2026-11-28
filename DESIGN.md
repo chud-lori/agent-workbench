@@ -18,7 +18,7 @@ diagnostics. It makes no LLM calls and no network calls.
 
 - Source: `AGENTS.md:3` ("Local, dependency-free MCP server + CLI: FTS code index over `~/repo`, persistent cross-tool memory ("brain"), and local AI-setup diagnostics. No LLM calls; deterministic retrieval only.")
 - Source: `pyproject.toml:4` (`description`), `pyproject.toml:14` (`dependencies = []`)
-- Source: verified by inspection, `agent_workbench/*.py` imports only `argparse, dataclasses, datetime, hashlib, json, os, pathlib, re, shutil, sqlite3, subprocess, sys, time, typing`. No `urllib`, `socket`, `http`, or `requests`.
+- Source: verified by inspection, `agent_workbench/*.py` imports only `argparse, dataclasses, datetime, hashlib, json, os, pathlib, re, shutil, sqlite3, subprocess, sys, time, typing`. No `urllib`, `socket`, `http`, or `requests`. Since then `graph_server.py` imports `http.server` for the opt-in graph page, which listens on 127.0.0.1 only and makes no outbound connection.
 
 The audience is one person: the developer who installed it, reading it as
 reference while their agent is running. It is not a product being sold.

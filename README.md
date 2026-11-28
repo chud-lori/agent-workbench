@@ -26,7 +26,7 @@ Every agent session starts from zero: no memory of yesterday's decisions, no vie
 - **A local code index.** One bm25 query across every indexed repo, with incremental refresh. No embeddings and no API calls, so the same query returns the same rows; your agent does the semantic reasoning on top.
 - **Setup diagnostics.** Five local scans: MCP config files, assistant permission allowlists, secrets on disk, oversized state, and stale doc paths.
 
-It is a single stdio MCP server plus CLI in stdlib-only Python (3.10 or newer, the sole requirement). It makes **no LLM calls and no network calls**: the package imports only the standard library, and none of those imports opens a socket. Git is shelled out to; nothing else leaves the machine. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
+It is a single stdio MCP server plus CLI in stdlib-only Python (3.10 or newer, the sole requirement). It makes **no LLM calls and no network calls**: the package imports only the standard library. The one socket it opens is the opt-in `graph` command, which serves a read-only page on 127.0.0.1. Git is shelled out to; nothing else leaves the machine. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 
 ## Quickstart
 
@@ -55,7 +55,7 @@ Environment variables with defaults. Nothing is hardcoded to a particular machin
 
 ## MCP tools
 
-Twenty tools, each with a CLI twin. The reference below mirrors the `TOOLS` table in `agent_workbench/mcp_server.py`.
+Twenty-five tools, each with a CLI twin. The reference below mirrors the `TOOLS` table in `agent_workbench/mcp_server.py`.
 
 **Task start:**
 
@@ -72,6 +72,7 @@ Twenty tools, each with a CLI twin. The reference below mirrors the `TOOLS` tabl
 - `brain_promote` (CLI `promote`) - append a proven personal note to a shared, git-versioned markdown file, and stamp it so it promotes once
 - `brain_resolve` / `brain_forget` (CLI `resolve` / `forget`) - mark done (kept, hidden from default recall) / delete
 - `brain_export` (CLI `export`) - dump all notes to markdown. The index is rebuildable; the brain is not, so this is the backup
+- `brain_graph` (CLI `graph`) - how notes link through inline references (`gotcha#7`, `brain#42`) and supersedes chains. The MCP tool returns counts only: orphan notes, references to ids that do not exist, and the most-cited notes. The CLI serves a read-only graph on 127.0.0.1 (see [Brain graph](#brain-graph))
 
 **Code index and docs:**
 
@@ -166,12 +167,27 @@ python3 run_cli.py remember "orders API paginates at 50, per TICKET-1234" --kind
 python3 run_cli.py recall "pagination"
 python3 run_cli.py resolve 7          # mark a todo done (kept, hidden from default recall)
 python3 run_cli.py export --out brain-backup.md
+python3 run_cli.py graph              # read-only graph of the brain on 127.0.0.1
 python3 run_cli.py index && python3 run_cli.py index-status
 python3 run_cli.py code-search "rate limiter"
 python3 run_cli.py repo-state my-api
 python3 run_cli.py doctor --all
 python3 run_cli.py mcp-server         # what the MCP registration runs
 ```
+
+## Brain graph
+
+```bash
+python3 run_cli.py graph                      # serves on 127.0.0.1, prints the URL, opens the browser
+python3 run_cli.py graph --no-open --port 8765
+python3 run_cli.py graph --export graph.html  # one self-contained file, no server
+```
+
+Notes are nodes, coloured by kind and sized by how often they are cited. An edge is an inline reference (`<kind>#<id>` or `brain#<id>`) to a note that exists, or a supersedes link when superseded notes are shown. References to ids that do not exist are listed, not drawn. Project, kind, tag, date, resolved and superseded are filters; the search box runs the same FTS query as `brain_recall`. Clicking a note opens its full text and its links in both directions, and focus mode keeps one note and up to three hops around it, which is the usable view on a brain of a few thousand notes.
+
+The page is read-only by construction. The server binds 127.0.0.1 with no option to bind anything else, requires the random token from the printed URL on every request, refuses any `Host` other than `127.0.0.1:<port>` or `localhost:<port>` (DNS rebinding), answers GET and HEAD only, and opens the brain with SQLite `mode=ro`. Note bodies load on click and are rendered as text, never HTML, under a Content-Security-Policy with no inline script. The renderer is [force-graph](https://github.com/vasturiano/force-graph) 1.52.0 (MIT), vendored under `agent_workbench/web/vendor/` with its sha256 checked by a test, so the page loads nothing from a CDN.
+
+`--export` inlines the page, the renderer and every note into one file that opens offline. It prints a warning because that file holds the full text of the brain.
 
 ## Optional: connector sidecar
 

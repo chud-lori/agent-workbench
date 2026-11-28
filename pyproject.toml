@@ -19,6 +19,9 @@ agent-workbench = "agent_workbench.cli:main"
 [tool.setuptools.packages.find]
 include = ["agent_workbench*"]
 
+[tool.setuptools.package-data]
+agent_workbench = ["web/*.html", "web/*.js", "web/*.css", "web/vendor/*"]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

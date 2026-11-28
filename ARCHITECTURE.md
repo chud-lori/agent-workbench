@@ -45,6 +45,8 @@ capabilities: a searchable code/product index, a persistent cross-tool memory
         |  activity.py     git evidence per window, all local repos     |
         |  repo_state.py   branch/baseline/worktree identity (git)      |
         |  knowledge.py    live doc search, brief_task orchestrator     |
+        |  graph.py        note links from inline refs (read-only)      |
+        |  graph_server.py 127.0.0.1 graph page + HTML export (web/)    |
         |  scanners.py     doctor: secrets/MCP/permissions/stale docs   |
         |  work_sources.py sidecar connector health (no secrets)        |
         |            (config.py = paths/env, util.py = fs/proc)         |
@@ -102,6 +104,19 @@ Per-repo metadata (dominant language by suffix count, present package files) fee
 | Deletion | `forget` clears every table in `brain.NOTE_KEYED_TABLES`, not a hand-written list per caller. A test reads `sqlite_master` and fails if a table carries a `note_id` column without being registered |
 | Migration | `_connect` detects a pre-porter or pre-`resolved_at` schema and rebuilds the table **preserving rowids**, so note ids stay stable across upgrades |
 | Backup | `export` dumps everything (including resolved) to markdown, grouped by project |
+
+### Brain graph (`graph.py`, `graph_server.py`, `web/`; reads `.state/brain.sqlite`)
+
+| Aspect | Implementation |
+|---|---|
+| Edges | no link table exists, so `graph.build(conn)` derives them: `REF_PATTERN` matches `brain#<id>` or `<kind>#<id>` in note text, and an edge is kept when the id is a different note that passes the filters. Duplicate references in one note collapse to one edge. `superseded_by` adds a supersedes edge when both notes are shown |
+| Dangling | a reference to an id missing from the brain is counted and listed, never drawn. A reference to a note that exists but is filtered out (resolved, superseded, another project) is neither |
+| Read-only | `connect_readonly` opens the brain as a `file:` URI with `mode=ro`; `brain._connect` is not used because it runs DDL |
+| MCP | `brain_graph` returns `build()` stats only (orphans with sample ids, dangling references, most cited). It never starts a server |
+| Server | `http.server.ThreadingHTTPServer` on `127.0.0.1`, no bind option. Every request needs the `token` query parameter (`secrets.token_urlsafe(32)`, compared with `hmac.compare_digest`) and a `Host` of `127.0.0.1:<port>` or `localhost:<port>`. GET and HEAD only, anything else is 405. Static files are a fixed allowlist, not a directory. `/graph.json` carries titles and no bodies; `/note/<int>` returns one body as JSON; `/search.json` runs the brain's FTS query. Request logging is off because the request line carries the token |
+| Page | `web/index.html`, `app.js` and `app.css`, no build step. Note text reaches the DOM through `textContent` only, and a test fails if `app.js` gains an HTML sink. CSP is `default-src 'none'` with `script-src 'self'`; `style-src` adds the sha256 of the empty string and of the two stylesheets the renderer injects at load, instead of `'unsafe-inline'` |
+| Export | `--export` inlines the page, the renderer and the full graph with bodies. The JSON sits in a `type="application/json"` script with `<`, `>`, `&`, U+2028 and U+2029 escaped, and a `<meta>` CSP admits the two inline scripts by hash |
+| Renderer | force-graph 1.52.0 (MIT), vendored with its licence; `tests/test_graph.py` pins its sha256 |
 
 ### Session ledger (`ledger.py` → `.state/ledger.sqlite`)
 
@@ -171,7 +186,7 @@ Hand-rolled JSON-RPC 2.0 over stdio — no MCP SDK, one JSON object per line:
   JSON-RPC errors; handler exceptions become `-32603` responses instead of killing the
   loop.
 - `TOOLS` is a static name → `{description, inputSchema}` dict; `handlers` maps the
-  same names to lambdas over the domain functions. 16 tools total.
+  same names to lambdas over the domain functions. 25 tools total.
 - Results are returned twice per the MCP spec: pretty-printed JSON in
   `content[0].text` and the raw dict in `structuredContent`.
 - Every result is capped at `RESULT_BYTE_CAP` (10 KB): over it, whole items are popped
@@ -310,6 +325,7 @@ cap) and `max_search_results` (50 — default `search_knowledge` limit).
 - **One-level repo discovery.** Roots and their immediate children only — no recursive
   repo hunting across the disk.
 - **No LLM calls, no network calls.** Purely local filesystem + SQLite (the only
-  subprocesses are `git` status reads in `work_sources`).
+  subprocesses are `git` status reads in `work_sources`). The opt-in `graph` command
+  listens on 127.0.0.1 while it runs and makes no outbound connection.
 - **No daemon.** The index is a snapshot refreshed on demand (CLI, MCP tool, or the
   SessionStart hook), not a file watcher.
