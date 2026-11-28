@@ -25,6 +25,7 @@
   <label>To <input id="until" type="date"></label>
   <label><input id="resolved" type="checkbox"> Resolved</label>
   <label><input id="superseded" type="checkbox"> Superseded</label>
+  <label><input id="unlinked" type="checkbox"> Unlinked</label>
   <label>Colour by <select id="colour"><option value="kind">Kind</option><option value="project">Project</option></select></label>
   <button id="clear" type="button">Clear filters</button>
   <div id="kinds" class="key" role="group" aria-label="Kinds"></div>
@@ -34,7 +35,7 @@
   <div class="stage">
     <div id="graph"></div>
     <div id="stage-message" class="stage-message" role="status">Loading the graph…</div>
-    <p id="hover" class="hover" aria-hidden="true"></p>
+    <div id="hover" class="hover" aria-hidden="true" hidden></div>
   </div>
   <aside class="panel" aria-label="Details">
     <section id="note" hidden>

@@ -7,6 +7,9 @@
   const LABEL_ZOOM = 4;
   const LIST_LIMIT = 50;
   const LABELLED_MATCHES = 12;
+  const MIN_HIT_PX = 8;
+  const LABELLED_HUBS = 10;
+  const MAX_FIT_ZOOM = 8;
 
   const $ = (id) => document.getElementById(id);
   const token = new URLSearchParams(location.search).get('token') || '';
@@ -25,6 +28,8 @@
   let matches = null;
   let lit = null;
   let topMatches = new Set();
+  let hubs = new Set();
+  let hoverId = null;
   let searchRun = 0;
 
   function el(tag, text, className) {
@@ -91,6 +96,7 @@
       until: dayBound($('until').value, true),
       resolved: $('resolved').checked,
       superseded: $('superseded').checked,
+      unlinked: $('unlinked').checked,
     };
   }
 
@@ -128,7 +134,12 @@
     let ids = new Set(data.nodes.filter((node) => passes(node, f)).map((node) => node.id));
     if (focus && ids.has(focus.id)) ids = withinHops(ids, data.edges, focus.id, focus.hops);
     const edges = data.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
+    const linked = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
+    const orphans = data.nodes.filter((node) => ids.has(node.id) && !linked.has(node.id));
+    // Unlinked notes carry no structure and ring the overview, so they are listed rather than drawn by default.
+    if (!f.unlinked) for (const node of orphans) if (!focus || node.id !== focus.id) ids.delete(node.id);
     return {
+      orphans,
       nodes: data.nodes.filter((node) => ids.has(node.id)),
       // force-graph replaces source/target with node objects, so it gets copies.
       links: edges.map((edge) => ({ source: edge.source, target: edge.target, type: edge.type })),
@@ -139,6 +150,8 @@
   function render() {
     visible = computeVisible();
     fg.graphData({ nodes: visible.nodes, links: visible.links });
+    hubs = new Set([...visible.nodes].filter((node) => node.cited_by > 0)
+      .sort((a, b) => b.cited_by - a.cited_by).slice(0, LABELLED_HUBS).map((node) => node.id));
     const total = data.nodes.length.toLocaleString();
     let summary = visible.nodes.length.toLocaleString() + ' of ' + total + ' notes, ' + count(visible.links.length, 'link');
     if (focus) summary += '. Focused on ' + ref(byId.get(focus.id)) + ', ' + count(focus.hops, 'hop');
@@ -189,15 +202,13 @@
 
   function renderHealth() {
     const inDegree = new Map();
-    const linked = new Set();
     for (const edge of visible.edges) {
-      linked.add(edge.source).add(edge.target);
       if (edge.type === 'cites') inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
     }
     const cited = [...inDegree].sort((a, b) => b[1] - a[1] || a[0] - b[0]).slice(0, 10)
       .map(([id, times]) => noteItem(byId.get(id), 'cited ' + count(times, 'time')));
     fillList($('cited-list'), $('cited-title'), 'Most cited', cited, 'No note in view is cited by another.');
-    const orphans = visible.nodes.filter((node) => !linked.has(node.id)).map((node) => noteItem(node));
+    const orphans = visible.orphans.map((node) => noteItem(node));
     fillList($('orphans-list'), $('orphans-title'), 'Orphans', orphans, 'Every note in view links to another.');
     const shownIds = new Set(visible.nodes.map((node) => node.id));
     const dangling = data.dangling.filter((entry) => shownIds.has(entry.from))
@@ -231,15 +242,24 @@
       // Matches arrive best first; only the strongest few are labelled, or a broad query buries the view in text.
       const shown = new Set(visible.nodes.map((node) => node.id));
       topMatches = new Set([...matches].filter((id) => shown.has(id)).slice(0, LABELLED_MATCHES));
-    } else if (selectedId !== null) {
-      lit = new Set([selectedId]);
-      for (const edge of visible.edges) {
-        if (edge.source === selectedId) lit.add(edge.target);
-        if (edge.target === selectedId) lit.add(edge.source);
-      }
+    } else if (egoId() !== null) {
+      lit = neighbourhood(egoId());
     }
     // Re-setting an accessor makes force-graph repaint without reheating the simulation.
     fg.nodeColor(nodeColour).linkColor(linkColour);
+  }
+
+  function egoId() {
+    return selectedId !== null ? selectedId : hoverId;
+  }
+
+  function neighbourhood(id) {
+    const ids = new Set([id]);
+    for (const edge of visible.edges) {
+      if (edge.source === id) ids.add(edge.target);
+      if (edge.target === id) ids.add(edge.source);
+    }
+    return ids;
   }
 
   function nodeColour(node) {
@@ -251,7 +271,7 @@
     if (!lit) return link.type === 'supersedes' ? theme.edgeStrong : theme.edge;
     const source = typeof link.source === 'object' ? link.source.id : link.source;
     const target = typeof link.target === 'object' ? link.target.id : link.target;
-    const touches = matches ? lit.has(source) && lit.has(target) : source === selectedId || target === selectedId;
+    const touches = matches ? lit.has(source) && lit.has(target) : source === egoId() || target === egoId();
     return touches ? theme.edgeStrong : theme.edgeFaint;
   }
 
@@ -264,14 +284,77 @@
       ctx.lineWidth = 2 / scale;
       ctx.stroke();
     }
-    const labelled = scale >= LABEL_ZOOM || node.id === selectedId || topMatches.has(node.id);
-    if (!labelled || (lit && !lit.has(node.id))) return;
-    const title = node.title.length > 48 ? node.title.slice(0, 47) + '…' : node.title;
+  }
+
+  function wantsLabel(node, scale) {
+    // Overview labels only the most cited notes; a selection or hover labels its neighbourhood instead.
+    if (!lit) return scale >= LABEL_ZOOM || hubs.has(node.id);
+    if (!lit.has(node.id)) return false;
+    return matches ? topMatches.has(node.id) || scale >= LABEL_ZOOM : true;
+  }
+
+  function labelRank(node) {
+    if (node.id === egoId()) return -1;
+    return -node.cited_by;
+  }
+
+  // Labels are drawn after the nodes, most important first, and a label that would overlap one already drawn is skipped.
+  function drawLabels(ctx, scale) {
+    const nodes = visible.nodes.filter((node) => node.x !== undefined && wantsLabel(node, scale))
+      .sort((a, b) => labelRank(a) - labelRank(b));
+    const placed = [];
+    const height = 13 / scale;
     ctx.font = 11 / scale + 'px ' + theme.font;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3 / scale;
+    ctx.strokeStyle = theme.surface;
     ctx.fillStyle = theme.ink;
-    ctx.fillText(title, node.x, node.y + radius + 2 / scale);
+    for (const node of nodes) {
+      const title = node.title.length > 40 ? node.title.slice(0, 39) + '…' : node.title;
+      const width = ctx.measureText(title).width;
+      const top = node.y + Math.sqrt(1 + node.cited_by) * 3 + 2 / scale;
+      const box = { left: node.x - width / 2, right: node.x + width / 2, top, bottom: top + height };
+      if (placed.some((p) => box.left < p.right && box.right > p.left && box.top < p.bottom && box.bottom > p.top)) continue;
+      placed.push(box);
+      ctx.strokeText(title, node.x, top);
+      ctx.fillText(title, node.x, top);
+    }
+  }
+
+  function zoomToNeighbourhood(id) {
+    const nodes = [...neighbourhood(id)].map((nid) => byId.get(nid)).filter((n) => n.x !== undefined);
+    const xs = nodes.map((n) => n.x);
+    const ys = nodes.map((n) => n.y);
+    const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    const stage = $('graph').parentElement;
+    const pad = 80;
+    const fit = Math.min((stage.clientWidth - 2 * pad) / (maxX - minX || 1), (stage.clientHeight - 2 * pad) / (maxY - minY || 1));
+    fg.centerAt((minX + maxX) / 2, (minY + maxY) / 2, motionMs(500));
+    fg.zoom(Math.min(fit, MAX_FIT_ZOOM), motionMs(500));
+  }
+
+  function paintHitArea(node, colour, ctx, scale) {
+    const radius = Math.max(Math.sqrt(1 + node.cited_by) * 3, MIN_HIT_PX / scale);
+    ctx.fillStyle = colour;
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+
+  function showHover(node) {
+    const card = $('hover');
+    hoverId = node ? node.id : null;
+    if (selectedId === null && !matches) redraw();
+    $('graph').style.cursor = node ? 'pointer' : '';
+    if (!node) {
+      card.hidden = true;
+      return;
+    }
+    const links = node.cited_by ? ' · cited ' + count(node.cited_by, 'time') : '';
+    card.replaceChildren(el('code', ref(node)), el('span', node.title), el('small', (node.project || 'no project') + links));
+    card.hidden = false;
   }
 
   function motionMs(ms) {
@@ -307,11 +390,9 @@
         if (selectedId === id) body.textContent = 'Could not load this note (' + error.message + '). Is the server still running?';
       });
     }
-    title.focus();
-    if (centre && shown && node.x !== undefined) {
-      fg.centerAt(node.x, node.y, motionMs(400));
-    }
+    if (centre) title.focus();
     redraw();
+    if (shown && node.x !== undefined) zoomToNeighbourhood(id);
   }
 
   function renderLinks(node) {
@@ -352,6 +433,7 @@
     for (const id of ['project', 'tag', 'since', 'until']) $(id).value = '';
     $('resolved').checked = false;
     $('superseded').checked = false;
+    $('unlinked').checked = false;
     focus = null;
     render();
   }
@@ -469,7 +551,15 @@
       .cooldownTicks(reducedMotion.matches ? 0 : 200)
       .cooldownTime(6000)
       .onNodeClick((node) => select(node.id, false))
-      .onNodeHover((node) => { $('hover').textContent = node ? ref(node) + ' ' + node.title : ''; });
+      .nodePointerAreaPaint(paintHitArea)
+      .onRenderFramePost(drawLabels)
+      .onNodeHover(showHover);
+    stage.addEventListener('pointermove', (event) => {
+      const box = stage.getBoundingClientRect();
+      const card = $('hover');
+      card.style.left = Math.min(event.clientX - box.left + 12, box.width - card.offsetWidth - 8) + 'px';
+      card.style.top = Math.min(event.clientY - box.top + 12, box.height - card.offsetHeight - 8) + 'px';
+    });
     let fitted = false;
     fg.onEngineStop(() => {
       if (!fitted && !matches && !focus) fg.zoomToFit(motionMs(300), 40);
@@ -479,7 +569,7 @@
       .observe(stage.parentElement);
 
     buildControls();
-    for (const id of ['project', 'since', 'until', 'resolved', 'superseded']) $(id).addEventListener('change', render);
+    for (const id of ['project', 'since', 'until', 'resolved', 'superseded', 'unlinked']) $(id).addEventListener('change', render);
     $('tag').addEventListener('change', render);
     $('colour').addEventListener('change', () => { renderKey(); redraw(); });
     $('clear').addEventListener('click', clearFilters);
