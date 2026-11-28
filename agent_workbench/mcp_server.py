@@ -8,6 +8,7 @@ from .activity import recent_activity
 from .brain import amend, export, forget, get_notes, promote, recall, remember, resolve
 from .code_index import code_search, codebase_overview, index_status, rebuild_index, refresh_index
 from .config import default_config
+from .graph import stats as graph_stats
 from .knowledge import brief_task, find_service_context, search_knowledge
 from .repo_state import repo_state
 from .rules import context_view, remember_rule, rule_feedback, rules_in_force
@@ -202,6 +203,14 @@ TOOLS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
+    "brain_graph": {
+        "description": "Health of the links between brain notes, read-only: orphan notes (no inline reference in or out) with sample ids, references to note ids that do not exist, and the most-cited notes. Links are inline `<kind>#<id>` / `brain#<id>` references plus supersedes chains; resolved and superseded notes are left out. For the visual graph, run the CLI `graph` command.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"project": {"type": "string", "description": "Only notes filed under this project"}},
+            "additionalProperties": False,
+        },
+    },
     "find_service_context": {
         "description": "Find likely repo/service context and commands for a service name.",
         "inputSchema": {
@@ -351,6 +360,7 @@ def serve() -> int:
         "brain_forget": lambda args: forget(args.get("id", 0), default_config()),
         "brain_resolve": lambda args: resolve(args.get("id", 0), default_config()),
         "brain_export": lambda args: export(args.get("path"), default_config()),
+        "brain_graph": lambda args: graph_stats(args.get("project"), default_config()),
         "work_sources_status": lambda args: work_sources_status(default_config()),
     }
     for line in sys.stdin:

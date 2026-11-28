@@ -50,6 +50,7 @@ New machine? See **Harness setup** below to register the MCP and install the sta
 | `brain_promote` | append a proven note to a shared, git-versioned markdown reference (team playbook); stamps the note so it promotes once |
 | `brain_resolve` | mark a todo/note resolved (hidden from default recall; `include_resolved` shows it) |
 | `brain_export` | dump all brain notes to markdown (backup) |
+| `brain_graph` | link health of the brain, read-only: orphan notes, references to ids that do not exist, most-cited notes. Edges are inline `<kind>#<id>` / `brain#<id>` references plus supersedes chains. The CLI twin `run_cli.py graph` serves a read-only graph page on 127.0.0.1 (token in the URL, `Host` checked, GET and HEAD only, SQLite `mode=ro`); `--export FILE` writes one self-contained HTML holding every note's text |
 | `repo_state` | branch + ahead/behind origin/main|master + dirty/staleness for a repo — run before prod-behavior claims |
 | `recent_activity` | commits you made in a time window across every local repo (all branches, so unpushed work shows) — the git half of "what did I do yesterday?". Per-repo counts by default; `repo=<name>` returns that repo's commits |
 | result size | every tool result is capped at about 10 KB by dropping whole list items, flagged with `truncated` and `dropped_items`. `brain_export` and `doctor_report` are exempt, since no argument could narrow them |
@@ -320,6 +321,7 @@ Regression tests live in `tests/test_worktree.py` and build a real worktree.
 
 - Python ≥3.10, stdlib only — do not add dependencies. `tomllib` is 3.11+, so it is imported through `util.load_toml()`, which raises a named reason on 3.10; callers must report that they could not read a file rather than reporting it as absent (`tests/test_portability.py` guards this).
 - State lives in `.state/` (`index.sqlite`, `brain.sqlite`, `ledger.sqlite`); never commit it.
+- `agent_workbench/web/vendor/force-graph.min.js` is a pinned third-party build. Replacing it means updating the sha256 in `tests/test_graph.py`, `SOURCE.txt`, and `VENDOR_STYLE_HASHES` in `graph_server.py`, which lets CSP admit the two stylesheets the bundle injects; the test recomputes those from the bundle.
 - Shell hooks in `harness/git-hooks/` are POSIX `sh`, not bash, and are matched with `grep -E` — write alternations as `a|b`, never `a\|b` (inside `-E` that is a literal pipe, which once silently disabled the whole vendor list).
 - Index roots come from `AGENT_WORKBENCH_INDEX_ROOTS` (colon/comma-separated), else `.state/index-roots`, else `~/repo`; explicit `roots` args override all three. Doctor intentionally also scans the projects root, which defaults to the clone's parent directory.
 - Smoke test after changes: pipe `initialize` + `tools/list` JSON-RPC lines into `run_mcp.py` and check the reply.
